@@ -1103,6 +1103,333 @@ dd {
   width: 100%;
 }
 
+.penalties-page {
+  max-width: 1280px;
+}
+
+.penalty-section-picker {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 18px;
+}
+
+.penalty-section-picker button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe8f3;
+  border-radius: 10px;
+  color: var(--navy);
+  display: flex;
+  gap: 16px;
+  min-height: 104px;
+  padding: 20px;
+  text-align: left;
+}
+
+.penalty-section-picker button svg {
+  background: #e9f6ff;
+  border-radius: 14px;
+  color: #1486ce;
+  height: 46px;
+  padding: 11px;
+  width: 46px;
+}
+
+.penalty-section-picker button.active {
+  border-color: #1496d4;
+  box-shadow: 0 12px 28px rgba(19, 45, 91, 0.08);
+}
+
+.penalty-section-picker strong,
+.penalty-section-picker small {
+  display: block;
+}
+
+.penalty-section-picker strong {
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.penalty-section-picker small {
+  color: #74859c;
+  font-size: 13px;
+  font-weight: 750;
+  margin-top: 5px;
+}
+
+.penalty-panel {
+  padding: 22px;
+}
+
+.penalty-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.penalty-toolbar h2 {
+  color: var(--navy);
+  font-size: 22px;
+  font-weight: 950;
+  margin: 0 0 4px;
+}
+
+.penalty-toolbar p {
+  color: #74859c;
+  font-size: 13px;
+  font-weight: 750;
+  margin: 0;
+}
+
+.penalty-search {
+  min-width: min(100%, 360px);
+}
+
+.penalty-summary-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.penalty-summary-grid article {
+  background: #f8fbfe;
+  border: 1px solid #e5edf6;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.penalty-summary-grid span {
+  color: #73849c;
+  display: block;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.penalty-summary-grid strong {
+  color: var(--navy);
+  display: block;
+  font-size: 20px;
+  font-weight: 950;
+  margin-top: 6px;
+}
+
+.penalty-card-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.penalty-card {
+  border: 1px solid #e1e9f3;
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  min-height: 188px;
+  padding: 16px;
+}
+
+.penalty-card-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.penalty-card h3 {
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.penalty-card-head span {
+  background: #fff4df;
+  border: 1px solid #f1d49b;
+  border-radius: 999px;
+  color: #a66d00;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 950;
+  padding: 5px 8px;
+}
+
+.penalty-card p {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.penalty-card dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: auto 0 0;
+}
+
+.penalty-card dt {
+  color: #8b9ab0;
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.penalty-card dd {
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.penalty-points-layout {
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  margin-bottom: 22px;
+}
+
+.penalty-points-main {
+  background: var(--navy);
+  border-radius: 12px;
+  color: #fff;
+  padding: 24px;
+}
+
+.penalty-points-main span {
+  color: #93dcff;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.penalty-points-main h2 {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 950;
+  margin: 8px 0 10px;
+}
+
+.penalty-points-main p {
+  color: #dce8f7;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.penalty-point-meter {
+  align-items: center;
+  background: #ffffff14;
+  border: 1px solid #ffffff24;
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px;
+}
+
+.penalty-point-meter strong {
+  color: #fff;
+  font-size: 36px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.penalty-rules-list {
+  display: grid;
+  gap: 10px;
+}
+
+.penalty-rules-list div {
+  align-items: flex-start;
+  background: #f8fbfe;
+  border: 1px solid #e5edf6;
+  border-radius: 10px;
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+}
+
+.penalty-rules-list span {
+  align-items: center;
+  background: #e9f6ff;
+  border-radius: 999px;
+  color: #087fbd;
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 950;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.penalty-rules-list p {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.penalty-table-wrap {
+  overflow-x: auto;
+}
+
+.penalty-table {
+  border-collapse: collapse;
+  min-width: 820px;
+  width: 100%;
+}
+
+.penalty-table th,
+.penalty-table td {
+  border-top: 1px solid #edf3f8;
+  padding: 14px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.penalty-table th {
+  color: #7b8ba3;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+.penalty-table td {
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.penalty-table td:first-child {
+  width: 46%;
+}
+
+.penalty-table td span {
+  color: #64748b;
+  display: block;
+  font-weight: 650;
+  line-height: 1.45;
+  margin-top: 5px;
+}
+
+.penalty-table td:last-child strong {
+  background: #fff4df;
+  border-radius: 999px;
+  color: #a66d00;
+  display: inline-block;
+  padding: 5px 9px;
+}
+
 .media-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -6245,6 +6572,38 @@ td {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 1180px) {
+  .penalty-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .penalty-points-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .penalty-section-picker,
+  .penalty-summary-grid,
+  .penalty-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .penalty-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .penalty-search {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .penalty-card dl {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 1180px) {

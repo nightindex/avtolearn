@@ -16685,5 +16685,409 @@
     }
   ],
   "roadSignsParsedFrom": "https://back.eavtotalim.uz/v2/api/road-sign/index",
-  "roadSignsDownloadedAt": "2026-06-05T10:49:43.553Z"
+  "roadSignsDownloadedAt": "2026-06-05T10:49:43.553Z",
+  "penalties": [
+    {
+      "id": 1,
+      "title": "Xavfsizlik kamari / Motoshlem",
+      "description": "Haydovchilarning transport vositalarini boshqarishda va yo'lovchilarni tashishda xavfsizlik kamarlaridan foydalanish qoidalariga rioya qilmaslik, shuningdek, mototsikl haydovchilarining motoshlemalardan foydalanish qoidalariga rioya qilmaslik.",
+      "article": "125-modda, 1-qism",
+      "amount": "206 000 so'm",
+      "bcv": "0.5",
+      "points": ""
+    },
+    {
+      "id": 2,
+      "title": "Texnik ko'rik, birinchi tibbiy yordam to'plami (aptechka), nimcha (jilet), yong'in o'chirgich, avariyaviy to'xtash belgisi",
+      "description": "Belgilangan tartibda roʻyxatdan oʻtkazilmagan, majburiy texnik koʻrikdan oʻtmagan, nosozliklari boʻlgan, yongʻin oʻchirish moslamasi, birinchi tibbiy yordam toʻplami, avariya belgisi va jilet bilan jihozlanmagan, shuningdek chiqindilardagi ifloslantiruvchi moddalar miqdori va yaratilgan shovqin darajasi belgilangan me'yorlardan oshib ketadigan boʻlsa.",
+      "article": "125-modda, 2-qism",
+      "amount": "206 000 so'm",
+      "bcv": "0.5",
+      "points": ""
+    },
+    {
+      "id": 3,
+      "title": "Ruxsatisiz tormoz, rul, ulagich va konversiyadagi nosozliklar",
+      "description": "Tormoz tizimi, rul boshqaruvi yoki ulagich ishlamay qolgan yoki tegishli ruxsatnomasiz qayta jihozlangan transport vositalarini haydovchilarni boshqarish.",
+      "article": "125-modda, 3-qism",
+      "amount": "412 000 so'm",
+      "bcv": "1",
+      "points": "0.3"
+    },
+    {
+      "id": 4,
+      "title": "O'chirilgan takograf",
+      "description": "Shaharlararo va xalqaro yo&lsquo;lovchi tashishni amalga oshiruvchi avtobuslarni boshqaruv moslamalari (taxograflari)siz yoki taxograflari o&lsquo;chirilgan holda boshqarayotgan haydovchilar.",
+      "article": "125-modda, 4-qism",
+      "amount": "1 236 000 so'm",
+      "bcv": "3",
+      "points": ""
+    },
+    {
+      "id": 5,
+      "title": "Davlat raqamisiz",
+      "description": "Belgilangan tartibda foydalanish taqiqlangan transport vositalarini, shuningdek davlat raqamlari o'zboshimchalik bilan olib tashlangan transport vositalarini boshqarish.",
+      "article": "125-modda, 5-qism",
+      "amount": "2 060 000 so'm",
+      "bcv": "5",
+      "points": "1"
+    },
+    {
+      "id": 6,
+      "title": "Soxta davlat raqami",
+      "description": "Soxta yoki boshqacha tarzda o'zgartirilgan davlat raqamlari, shuningdek ushbu transport vositasiga tegishli bo'lmagan davlat raqamlari bilan transport vositalarini boshqarish.",
+      "article": "125-modda, 6-qism",
+      "amount": "4 120 000 so'm",
+      "bcv": "10",
+      "points": ""
+    },
+    {
+      "id": 7,
+      "title": "Yuklarni tashish va tortish",
+      "description": "Yuklarni tashish qoidalarini buzish, shuningdek, shatakka olish qoidalarini buzish.",
+      "article": "125-1 -modda, 1-qism",
+      "amount": "4 120 000 so'm",
+      "bcv": "10",
+      "points": ""
+    },
+    {
+      "id": 8,
+      "title": "Katta hajmli yuk",
+      "description": "Og'ir, katta hajimli, xavfli yuklarni tashish va gabarit o'lchamlari yuk bilan yoki yuksiz belgilangan me'yorlardan ortiq bo'lgan transport vositalarida tegishli ruxsatnomasiz yo'lda haydash.",
+      "article": "125-1 -modda, 2-qism",
+      "amount": "4 120 000 - 6 180 000 so'm",
+      "bcv": "10 - 15",
+      "points": ""
+    },
+    {
+      "id": 9,
+      "title": "Oyna yoki rangli oynalar bilan ishlash, shuningdek ko'rinishni cheklaydigan qoplamalar bilan",
+      "description": "Texnik reglamentga muvofiq bo 'lmagan oynali va (yoki) rangli (qoraytirilgan) oynali transport vositalarining, shuningdek, qo' shimcha buyumlar o 'rnatilgan yoki haydovchi o'rindig'idan ko' rib chiqishni cheklaydigan qoplamalar qo ' yilgan transport vositalarining ishlashi, oynalarini tonlash uchun tegishli ruxsatnoma berilgan transport vositalari bundan mustasno.\n! Jarimani rasmiylashtirishda mashina hibsga olish sababi bartaraf etilgunga qadar to'xtash joyida ushlab turiladi.\n! Old va old eshik derazalarining yorug'lik o'tkazuvchanligi standartlarini buzganlik uchun ham xuddi shunday jazo qo'llaniladi.",
+      "article": "126-modda, 1-qism",
+      "amount": "10 300 000 so'm",
+      "bcv": "25",
+      "points": "0.5"
+    },
+    {
+      "id": 11,
+      "title": "Ovoz, yorug'lik va boshqa qurilmalarni o'rnatish",
+      "description": "Ovozli signalni maqsadsiz etkazib berish, ishlab chiqaruvchi tomonidan ko'zda tutilmagan ovozli va yorug'lik moslamalarini transport vositalariga o'rnatish, shuningdek ularni qayta qurish.",
+      "article": "127-modda, 1-qism",
+      "amount": "1 236 000 so'm",
+      "bcv": "3",
+      "points": "0.2"
+    },
+    {
+      "id": 12,
+      "title": "Maxsus ovoz va yorug'lik moslamalarini o'rnatish",
+      "description": "Tegishli ruxsatisiz transport vositalariga maxsus ovoz va yorug'lik moslamalarini o'rnatish (fuqarolar uchun).",
+      "article": "127-modda, 2-qism",
+      "amount": "412 000 - 1 236 000 so'm",
+      "bcv": "1 - 3",
+      "points": ""
+    },
+    {
+      "id": 13,
+      "title": "Piyodalar yo'laklarida harakatlanish, piyodalarga loy sachratis",
+      "description": "Haydovchilar tomonidan piyodalar yo`laklarida, piyodalar va velosiped yo`llarida, yashil maydonlarda haydash, jamoat transporti vositalarining to`xtash joylaridan qoidalarni buzib o`tish, tashqi yoritish moslamalaridan foydalanishi, shuningdek, piyodalarga loy sachratish.",
+      "article": "128-modda",
+      "amount": "412 000 so'm",
+      "bcv": "1",
+      "points": ""
+    },
+    {
+      "id": 14,
+      "title": "Boshqarish paytida telefondan foydalanish",
+      "description": "Avtotransport vositasini boshqarish paytida haydovchilardan telefondan foydalanish (naushniklar va qurilmalar orqali qo'llarni ishlatmasdan muzokaralar olib borishga ruxsat berishdan tashqari).",
+      "article": "128-1 -modda, 1-qism",
+      "amount": "1 236 000 so'm",
+      "bcv": "3",
+      "points": ""
+    },
+    {
+      "id": 15,
+      "title": "Boshqarish paytida monitordan foydalanish",
+      "description": "Tele, video dasturlarni ko'rish va monitorni (displeyni) transport vositasida ruxsatsiz o'rnatish uchun transport vositasini boshqarish paytida monitordan (displeydan) foydalanish.",
+      "article": "128-2 -modda, 1-qis",
+      "amount": "412 000 so'm",
+      "bcv": "1",
+      "points": ""
+    },
+    {
+      "id": 16,
+      "title": "Tezlikni oshirish (5-20 km/soat)",
+      "description": "Transport vositalari haydovchilari tomonidan belgilangan harakat tezligi soatiga 20 kilometrdan oshmasligi kerak.",
+      "article": "128-3 -modda, 1-qism",
+      "amount": "412 000 so'm",
+      "bcv": "1",
+      "points": "0,5"
+    },
+    {
+      "id": 17,
+      "title": "Tezlikni oshirish (20-40 km/soat)",
+      "description": "Avtotransport vositalari haydovchilari tomonidan belgilangan harakat tezligini soatiga 20 kilometrdan ortiq, lekin 40 kilometrdan ko'p bo'lmagan miqdorda.",
+      "article": "128-3 -modda, 2-qism",
+      "amount": "2 060 000 so'm",
+      "bcv": "5",
+      "points": "1"
+    },
+    {
+      "id": 18,
+      "title": "Tezlikni oshirish (40 km/soat yoqori)",
+      "description": "Avtotransport vositalari haydovchilari tomonidan belgilangan harakat tezligini soatiga 40 kilometrdan ortiq, lekin 60 kilometrdan ko'p bo'lmagan miqdorda.",
+      "article": "128-3 -modda, 3-qism",
+      "amount": "3 708 000 so'm",
+      "bcv": "9",
+      "points": "1,5"
+    },
+    {
+      "id": 19,
+      "title": "Tezlikni oshirish 60 km/soat yoqori",
+      "description": "Avtotransport vositalari haydovchilari tomonidan belgilangan harakat tezligini soatiga 60 kilometrdan ortiq bo'lmagan miqdorda.",
+      "article": "128-3 -modda, 4-qism",
+      "amount": "6 180 000 so'm",
+      "bcv": "15",
+      "points": "2"
+    },
+    {
+      "id": 20,
+      "title": "To'xtash chizig'iga kirish",
+      "description": "Svetoforning taqiqlovchi signalida yoki yo&lsquo;l harakatini tartibga soluvchining taqiqlovchi ishorasida yo&lsquo;lning qatnov qismidagi yo&lsquo;l chiziqlari yoki yo&lsquo;l belgilari bilan belgilangan to&lsquo;xtash chizig&lsquo;ini bosib kirish.",
+      "article": "128-4 -modda, 1-qism",
+      "amount": "206 000 so'm",
+      "bcv": "0.5",
+      "points": ""
+    },
+    {
+      "id": 21,
+      "title": "\"Qizil\" chiroqa o'tish",
+      "description": "Transport vositalarining haydovchilari tomonidan svetoforning taqiqlangan signaliga yoki yo'l harakati nazoratchisining taqiqlangan ishorasiga o'tish.",
+      "article": "128-4 -modda, 2-qism",
+      "amount": "1 236 000 so'm",
+      "bcv": "3",
+      "points": "1"
+    },
+    {
+      "id": 22,
+      "title": "Maxsus transport vositalariga xalaqit berish",
+      "description": "Avtotransport vositalarining haydovchilari tomonidan to'siqsiz harakatlanish huquqidan foydalanadigan transport vositalarining o'tishiga xalaqit berish.",
+      "article": "128-5 -modda, 1-qism",
+      "amount": "2 060 000 so'm",
+      "bcv": "5",
+      "points": "0,5"
+    },
+    {
+      "id": 23,
+      "title": "Qarshi harakat",
+      "description": "Haydovchilar tomonidan yo'l harakati qoidalarini buzgan holda yo'lning yon tomoniga yoki qarama-qarshi harakatlanish uchun mo'ljallangan bo'lakka transport vositalarining chiqib ketishi, shuningdek ular tomonidan favqulodda vaziyat yuzaga kelgan, ya'ni boshqa yo'l foydalanuvchilarini tezlikni, yo'nalishni keskin o'zgartirishga majbur qilgan huquqbuzarlik sodir etilishi.harakat yoki o'z xavfsizligini yoki boshqa fuqarolarning xavfsizligini ta'minlash uchun boshqa choralarni ko'rish.",
+      "article": "128-5 -modda, 2-qism",
+      "amount": "4 120 000 so'm",
+      "bcv": "10",
+      "points": "1"
+    },
+    {
+      "id": 24,
+      "title": "To'xtatish taqiqlanadi",
+      "description": "Avtotransport vositalarining haydovchilari tomonidan to'xtash yoki to'xtash qoidalarini buzish.",
+      "article": "128-6 -modda",
+      "amount": "824 000 so'm",
+      "bcv": "2",
+      "points": "0,2"
+    },
+    {
+      "id": 25,
+      "title": "Yo'nalishli va maxsus transport vositalari uchun tasmasi bor yo'ldan harakatlanish",
+      "description": "Yo'nalishli va maxsus transport vositalari uchun alohida ajratilgan tasmasi bor yo'ldan transport vositalarining harakatlanishi",
+      "article": "128-7 -modda, 1-qism",
+      "amount": "412 000 so'm",
+      "bcv": "1",
+      "points": ""
+    },
+    {
+      "id": 27,
+      "title": "Avtotransportda odamlarni tashish qoidalarini buzish",
+      "description": "Odamlarni tashish qoidalarini buzish.",
+      "article": "128-8 -modda, 1-qism",
+      "amount": "824 000 so'm",
+      "bcv": "2",
+      "points": "0.3"
+    },
+    {
+      "id": 28,
+      "title": "Avtotransportda odamlarni tashish qoidalarini buzish",
+      "description": "Odamlarni avtobuslar va mikroavtobuslarda ichki ishlar organlari kuzatuvisiz tashish, agar odamlarni ularning kuzatuvi bilan tashish majburiy bo'lsa.",
+      "article": "128-8 -modda, 2-qism",
+      "amount": "2 060 000 so'm",
+      "bcv": "5",
+      "points": "0,5"
+    },
+    {
+      "id": 29,
+      "title": "Avtotransport vositalarini bosib o'tish qoidalarini buzish",
+      "description": "Avtotransport vositalarini bosib o'tish qoidalarini buzish.",
+      "article": "128-9 -modda",
+      "amount": "1 236 000 so'm",
+      "bcv": "3",
+      "points": "1"
+    },
+    {
+      "id": 32,
+      "title": "Guruh harakati",
+      "description": "Transport vositalari haydovchilarining yo'l harakati xavfsizligi yoki favqulodda vaziyatga tahdid soladigan yo'llarda guruh harakatida ishtirok etishi.",
+      "article": "129-modda",
+      "amount": "2 060 000 so'm",
+      "bcv": "5",
+      "points": "1,5"
+    },
+    {
+      "id": 33,
+      "title": "Temir yo'l kesishmasi",
+      "description": "Avtomobil haydovchilari tomonidan temir yo'l kesishmalaridan o'tish qoidalarini buzish.",
+      "article": "130-modda",
+      "amount": "2 060 000 so'm",
+      "bcv": "5",
+      "points": "1"
+    },
+    {
+      "id": 34,
+      "title": "Mast holatda haydash",
+      "description": "Mast holatda yoki giyohvandlik, psixotrop yoki boshqa moddalar ta'sirida transport vositasini boshqarish.",
+      "article": "131-modda, 1-qism",
+      "amount": "16 480 000 so'm",
+      "bcv": "40",
+      "points": ""
+    },
+    {
+      "id": 36,
+      "title": "Yengil tan jarohati yoki jiddiy moddiy zarar etkazgan yo'l harakati qoidalarini buzish",
+      "description": "Transport vositalari haydovchilari tomonidan jabrlanuvchiga engil tan jarohati yoki jiddiy moddiy zarar etkazilishiga olib keladigan yo'l harakati qoidalarini buzish.",
+      "article": "133-modda",
+      "amount": "2 060 000 - 2 884 000 so'm",
+      "bcv": "5-7",
+      "points": ""
+    },
+    {
+      "id": 37,
+      "title": "Avtotransport vositalariga yoki boshqa mol-mulkka zarar etkazadigan yo'l harakati qoidalarini buzish",
+      "description": "Avtotransport vositalarining haydovchilari tomonidan transport vositalariga, transport vositalarini tartibga solish vositalariga yoki boshqa mol-mulkka jiddiy moddiy zarar etkazmagan yo'l harakati qoidalarini buzish.",
+      "article": "134-modda",
+      "amount": "824 000 - 1 648 000 so'm",
+      "bcv": "2-4",
+      "points": ""
+    },
+    {
+      "id": 38,
+      "title": "Yonida hujjatlar bo&lsquo;lmagan holda avtomobilni boshqarish",
+      "description": "Haydovchilarning transport vositalarini boshqarish huquqini tasdiqlovchi hujjatlar, transport vositasini ro&lsquo;yxatdan o&lsquo;tkazganlik to&lsquo;g&lsquo;risidagi guvohnoma, shuningdek transport vositasi egasi yo&lsquo;qligida undan foydalanish yoki uni tasarruf etish huquqini tasdiqlovchi hujjatlar, majburiy sug&lsquo;urta polisi va qonunda ko&lsquo;zda tutilgan boshqa hujjatlarsiz transport vositalarini boshqarishi.",
+      "article": "135-modda, 1-qism",
+      "amount": "412 000 so'm",
+      "bcv": "1",
+      "points": ""
+    },
+    {
+      "id": 39,
+      "title": "Boshqaruvni boshqarish va boshqarish huquqiga ega bo'lmagan shaxsga o'tkazish",
+      "description": "Ushbu vositalarni boshqarish huquqiga ega bo'lmagan shaxslar tomonidan transport vositalarini boshqarish, shuningdek transport vositalarini boshqarishni boshqarish huquqiga ega bo'lmagan shaxsga o'tkazish.",
+      "article": "135-modda, 2-qism",
+      "amount": "2 060 000 so'm",
+      "bcv": "5",
+      "points": ""
+    },
+    {
+      "id": 40,
+      "title": "Huquqdan mahrum bo'lgan shaxslar boshqarish",
+      "description": "Ushbu huquqdan mahrum bo'lgan shaxslar tomonidan transport vositalarini boshqarish.",
+      "article": "135-modda, 3-qism",
+      "amount": "20 600 000 so'm",
+      "bcv": "50",
+      "points": ""
+    },
+    {
+      "id": 41,
+      "title": "Majburiy sug'urtasiz haydash (Sug'urta)",
+      "description": "Avtotransport vositalarini ulardan foydalanish davrida boshqarish, transport vositalari egalarining fuqarolik javobgarligini majburiy sug'urtalash bo'yicha sug'urta polislarida nazarda tutilmagan, shuningdek ushbu sug'urta polislarida nazarda tutilgan ushbu transport vositalarini boshqarish shartlari buzilgan holda transport vositalarini boshqarish faqat ushbu sug'urta polislarida ko'rsatilgan haydovchilar tomonidan.",
+      "article": "135-1 -modda, 1-qism",
+      "amount": "206 000 so'm",
+      "bcv": "0.5",
+      "points": ""
+    },
+    {
+      "id": 42,
+      "title": "Evasion of medical examination for intoxication",
+      "description": "Transport vositasi haydovchilarining mastlik holatini, giyohvandlik moddalari, ularning analoglari, psixotrop yoki boshqa moddalar ta'sirida ekanligini aniqlash uchun tekshiruvdan o'tishdan bosh tortishi.",
+      "article": "136 -modda, 1-qism",
+      "amount": "12 360 000 so'm",
+      "bcv": "30",
+      "points": ""
+    },
+    {
+      "id": 44,
+      "title": "V",
+      "description": "oqea joyini tark etish\nYo'l-transport hodisasi joyining belgilangan qoidalarini buzgan holda ishtirokchilar tomonidan tark etish.",
+      "article": "137-modda, 1-qism",
+      "amount": "6 180 000 so'm",
+      "bcv": "15",
+      "points": "2"
+    },
+    {
+      "id": 46,
+      "title": "Piyodalar tomonidan yo'l harakati qoidalarini buzish",
+      "description": "Piyodalarning yo'l harakatini tartibga soluvchi signallarga bo'ysunmasligi, belgilanmagan joylardan yo'lni kesib o'tishi, telefon ishlatishi, audio va video materiallarni tinglashi, bosma nashrlarni o'qishi va e&rsquo;tiborni chalg'ituvchi boshqa qurilmalardan foydalanishi, shuningdek, moped, skuter va velosiped boshqaruvchilari hamda yo'llardan foydalanuvchi boshqa shaxslarning yo'l harakatini tartibga soluvchi signallarga bo'ysunmasligi, ustuvorlik, taqiqlovchi yoki ko'rsatma beruvchi yo'l belgilari talablariga rioya etmasligi.",
+      "article": "138-modda, 1-qism",
+      "amount": "137 334 so'm",
+      "bcv": "0.33",
+      "points": ""
+    },
+    {
+      "id": 47,
+      "title": "Fuqarolarning qatnov qismida bo'lishi",
+      "description": "Fuqarolarning haydovchilarga turli xizmatlar ko'rsatish maqsadida yo'lning qatnov qismida turishi, shuningdek, yo'l chetidagi ajratilgan hududlarda chorva mollarini o'tlatish",
+      "article": "138-modda, 2-qism",
+      "amount": "206 000 so'm",
+      "bcv": "0.5",
+      "points": ""
+    },
+    {
+      "id": 48,
+      "title": "Avtomobildan tananing bir qismini chiqarib tashlash.",
+      "description": "Avtomobil harakatlanayotganda yo'lovchining tana qismlarini (qo'llardan tashqari) salondan chiqarib yuborishi.",
+      "article": "ст.138 ч.4",
+      "amount": "412 000 so'm",
+      "bcv": "1",
+      "points": ""
+    },
+    {
+      "id": 49,
+      "title": "Mast yoki litsenziyasiz avtoulovlarni boshqarish",
+      "description": "Alkogol, giyohvand modda yoki boshqa moddalar ta'sirida mast holda bo&lsquo;lgan haydovchilarning, yoxud transport vositalarini boshqarish huquqiga ega bo&lsquo;lmagan shaxslarning transport vositalarini boshqarishiga ruxsat berish yoki ularga transport vositalarini topshirish.",
+      "article": "140-modda",
+      "amount": "12 360 000 so'm",
+      "bcv": "30",
+      "points": ""
+    },
+    {
+      "id": 50,
+      "title": "Yo'llarga, yo'l inshootlariga, yo'l harakatini tartibga solishning texnik vositalariga zarar etkazish",
+      "description": "Yo'llarga, temir yo 'l kesishmalariga, boshqa inshootlarga yoki yo' l harakatini tartibga solishning texnik vositalariga zarar yetkazish, shuningdek yo 'l harakati uchun qasddan to' sqinlik qilish, shu jumladan yo 'l qoplamasini ifloslantirish yo' li bilan, shuningdek avtomobil yo 'llarini o' zboshimchalik bilan qazish, ularda sun'iy usuls&uuml;zl&uuml;kler va to 'siqlar qurish, avtomobil yo' lida ishlarni amalga oshirish uchun berilgan ruxsatnoma talablariga rioya qilmaslik, shuningdek, yo'llarni saqlash qoidalarini buzish.",
+      "article": "147-modda",
+      "amount": "2 060 000 - 3 750 000 so'm",
+      "bcv": "5",
+      "points": ""
+    }
+  ],
+  "penaltyInfo": {
+    "sourceUrl": "https://www.goldenpages.uz/uz/avto/avto_pdd/",
+    "updatedLabel": "Ma'lumot yangilangan 01.08.2025",
+    "bcvLabel": "BHM - 412 000 so'm (01.08.2025 dan)",
+    "summary": "Yo'l harakati qoidalari buzilganligi uchun jarima miqdori O'zbekiston Respublikasining Ma'muriy javobgarlik to'g'risidagi kodeksiga muvofiq belgilanadi.",
+    "pointsSummary": "2025-yil 1-iyundan haydovchilar uchun 12 ballik jarima ballari tizimi ishga tushgan. 2026-yil 1-apreldan avtomatlashtirilgan foto-video qayd etish moslamalari va YPX xodimlari aniqlagan qoidabuzarliklar bo'yicha ham ball hisoblanadi.",
+    "pointsRules": [
+      "Haydovchiga 12 oy davomida 12 ball limiti beriladi; limitga yetganda boshqarish huquqidan mahrum qilinadi.",
+      "To'plangan ballarni my.gov.uz yoki SafeROAD YHXX mobil ilovasi orqali kuzatish mumkin.",
+      "12 oy qoidabuzarliksiz yurgan haydovchining keyingi birinchi qoidabuzarligi uchun jarima balli hisoblanmaydi.",
+      "6 oy yangi qoidabuzarlik bo'lmasa, umumiy balldan 2 ball chegiriladi.",
+      "12 oy davomida ballar yig'indisi 12 tadan kam bo'lsa, ballar nollashtiriladi."
+    ]
+  },
+  "penaltiesDownloadedAt": "2026-06-05T10:55:15.291Z"
 }

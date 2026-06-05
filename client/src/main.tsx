@@ -33,6 +33,7 @@ import {
   Save,
   Search,
   ShieldAlert,
+  Scale,
   Sparkles,
   Timer,
   Trophy,
@@ -43,7 +44,7 @@ import {
   X,
 } from "lucide-react";
 import { askTutor, getData, getProgressSummary, getQuestions, getRecentProgress, getTemplates, saveQuestionProgress, saveTemplate, saveTestAttempt } from "./api";
-import type { AppData, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate } from "./types";
+import type { AppData, Penalty, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate } from "./types";
 import "./styles.css";
 import { Dashboard } from "./components/Dashboard";
 
@@ -70,6 +71,7 @@ const navGroups = [
       { id: "home", label: "Bosh sahifa", icon: Home },
       { id: "lessons", label: "Darslar", icon: BookOpen },
       { id: "road-signs", label: "Yo'l belgilari", icon: Hand },
+      { id: "penalties", label: "Jarimalar", icon: Scale },
       { id: "autodrome", label: "Avtodrom", icon: Flag },
       { id: "media", label: "Media", icon: Video },
     ],
@@ -88,7 +90,6 @@ const navGroups = [
     title: "Progress",
     items: [
       { id: "group", label: "Guruh", icon: UserRound },
-      { id: "penalties", label: "Jarimalar", icon: ShieldAlert },
       { id: "appeals", label: "Murojaat", icon: FileText },
     ],
   },
@@ -158,6 +159,7 @@ function App() {
     if (view === "home") return <Dashboard data={data} summary={summary} recent={recent} setView={setView} />;
     if (view === "lessons") return <Lessons data={data} />;
     if (view === "road-signs") return <RoadSigns data={data} />;
+    if (view === "penalties") return <PenaltiesPage data={data} />;
     if (view === "template-tests") {
       if (!activeTemplate) {
         return <TemplateTestsPage onStart={(template) => setActiveTemplate(template)} />;
@@ -633,6 +635,157 @@ function RoadSigns({ data }: { data: AppData }) {
           </article>
         ))}
       </div>
+    </div>
+  );
+}
+
+type PenaltySection = "fines" | "points";
+
+function PenaltiesPage({ data }: { data: AppData }) {
+  const [section, setSection] = useState<PenaltySection>("fines");
+  const [query, setQuery] = useState("");
+  const penalties = data.penalties || [];
+  const pointPenalties = penalties.filter((penalty) => penalty.points);
+  const maxPointPenalty = pointPenalties.reduce((best, penalty) => {
+    const value = Number(String(penalty.points).replace(",", ".").match(/\d+(\.\d+)?/)?.[0] || 0);
+    return value > best ? value : best;
+  }, 0);
+  const filteredPenalties = penalties.filter((penalty) => {
+    const haystack = `${penalty.title} ${penalty.description} ${penalty.article} ${penalty.amount}`.toLowerCase();
+    return haystack.includes(query.trim().toLowerCase());
+  });
+
+  const compactDescription = (penalty: Penalty) =>
+    penalty.description.length > 180 ? `${penalty.description.slice(0, 180).trim()}...` : penalty.description;
+
+  return (
+    <div className="penalties-page page-shell">
+      <PageHeader
+        eyebrow="YHQ javobgarligi"
+        title="Jarimalar"
+        subtitle="Yo'l harakati qoidabuzarliklari, jarima miqdorlari va jarima ballari bo'yicha o'quv ma'lumotlari."
+      />
+
+      <section className="penalty-section-picker card">
+        <button className={section === "fines" ? "active" : ""} onClick={() => setSection("fines")}>
+          <ShieldAlert size={22} />
+          <span>
+            <strong>Umumiy jarimalar</strong>
+            <small>{penalties.length} ta qoidabuzarlik</small>
+          </span>
+        </button>
+        <button className={section === "points" ? "active" : ""} onClick={() => setSection("points")}>
+          <Scale size={22} />
+          <span>
+            <strong>Jarima ballari</strong>
+            <small>{pointPenalties.length} ta balli qoidabuzarlik</small>
+          </span>
+        </button>
+      </section>
+
+      {section === "fines" ? (
+        <section className="penalty-panel card">
+          <div className="penalty-toolbar">
+            <div>
+              <h2>Jarimalar ro'yxati</h2>
+              <p>{data.penaltyInfo?.updatedLabel || "Ma'lumot lokal bazadan olindi."}</p>
+            </div>
+            <label className="search-box penalty-search">
+              <Search size={17} />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Jarima yoki modda bo'yicha qidirish" />
+            </label>
+          </div>
+
+          <div className="penalty-summary-grid">
+            <article>
+              <span>Manba</span>
+              <strong>{data.penaltyInfo?.bcvLabel || "BHM asosida"}</strong>
+            </article>
+            <article>
+              <span>Jarima balli bor</span>
+              <strong>{pointPenalties.length}</strong>
+            </article>
+            <article>
+              <span>Eng yuqori ball</span>
+              <strong>{maxPointPenalty}</strong>
+            </article>
+          </div>
+
+          <div className="penalty-card-grid">
+            {filteredPenalties.map((penalty) => (
+              <article className="penalty-card" key={penalty.id}>
+                <div className="penalty-card-head">
+                  <h3>{penalty.title}</h3>
+                  {penalty.points && <span>{penalty.points} ball</span>}
+                </div>
+                <p>{compactDescription(penalty)}</p>
+                <dl>
+                  <div>
+                    <dt>Modda</dt>
+                    <dd>{penalty.article}</dd>
+                  </div>
+                  <div>
+                    <dt>Jarima</dt>
+                    <dd>{penalty.amount}</dd>
+                  </div>
+                  <div>
+                    <dt>BHM</dt>
+                    <dd>{penalty.bcv || "-"}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className="penalty-panel card">
+          <div className="penalty-points-layout">
+            <article className="penalty-points-main">
+              <span>12 ballik tizim</span>
+              <h2>Jarima ballari qanday ishlaydi?</h2>
+              <p>{data.penaltyInfo?.pointsSummary}</p>
+              <div className="penalty-point-meter">
+                <strong>12</strong>
+                <span>oylik limit</span>
+              </div>
+            </article>
+            <div className="penalty-rules-list">
+              {(data.penaltyInfo?.pointsRules || []).map((rule, index) => (
+                <div key={rule}>
+                  <span>{index + 1}</span>
+                  <p>{rule}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="penalty-table-wrap">
+            <table className="penalty-table">
+              <thead>
+                <tr>
+                  <th>Qoidabuzarlik</th>
+                  <th>Modda</th>
+                  <th>Jarima</th>
+                  <th>Ball</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pointPenalties.map((penalty) => (
+                  <tr key={penalty.id}>
+                    <td>
+                      <strong>{penalty.title}</strong>
+                      <span>{compactDescription(penalty)}</span>
+                    </td>
+                    <td>{penalty.article}</td>
+                    <td>{penalty.amount}</td>
+                    <td><strong>{penalty.points}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

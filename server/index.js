@@ -303,6 +303,8 @@ async function handleApi(req, res) {
       tests: siteData.tests,
       signs: siteData.signs,
       roadSigns: siteData.roadSigns || [],
+      penalties: siteData.penalties || [],
+      penaltyInfo: siteData.penaltyInfo || null,
       counts: {
         questions: siteData.questions.length,
         videos: siteData.questions.filter((question) => question.video).length,

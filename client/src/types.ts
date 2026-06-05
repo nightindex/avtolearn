@@ -68,6 +68,25 @@ export type RoadSignItem = {
   audio?: string;
 };
 
+export type Penalty = {
+  id: number;
+  title: string;
+  description: string;
+  article: string;
+  amount: string;
+  bcv: string;
+  points: string;
+};
+
+export type PenaltyInfo = {
+  sourceUrl: string;
+  updatedLabel: string;
+  bcvLabel: string;
+  summary: string;
+  pointsSummary: string;
+  pointsRules: string[];
+};
+
 export type AppData = {
   brand: Brand;
   lessons: Lesson[];
@@ -75,6 +94,8 @@ export type AppData = {
   tests: TestTemplate[];
   signs: Sign[];
   roadSigns: RoadSignItem[];
+  penalties?: Penalty[];
+  penaltyInfo?: PenaltyInfo;
   counts: {
     questions: number;
     images: number;
