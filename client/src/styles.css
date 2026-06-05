@@ -5096,9 +5096,9 @@ td {
   color: #15325c;
   display: grid;
   gap: 10px;
-  grid-template-columns: 18px minmax(130px, 1fr) 16px;
+  grid-template-columns: 18px minmax(154px, 1fr) 16px;
   min-height: 48px;
-  min-width: 220px;
+  min-width: 252px;
   padding: 8px 14px;
   text-align: left;
 }
@@ -5131,7 +5131,7 @@ td {
   border: 1px solid #e6edf5;
   border-radius: 18px;
   box-shadow: 0 18px 40px #132d5b1a;
-  min-width: 320px;
+  min-width: 378px;
   overflow: hidden;
   position: absolute;
   right: 0;
@@ -5183,7 +5183,7 @@ td {
 
 .exact-date-grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -5208,8 +5208,13 @@ td {
   font-size: 13px;
   font-weight: 800;
   min-height: 42px;
-  padding: 8px 10px;
+  min-width: 0;
+  padding: 8px 12px;
   width: 100%;
+}
+
+.exact-date-grid input::-webkit-calendar-picker-indicator {
+  margin-left: 4px;
 }
 
 .apply-date-button {
@@ -5272,6 +5277,10 @@ td {
     flex-direction: column;
   }
 
+  .date-range-picker {
+    width: 100%;
+  }
+
   .date-range-trigger {
     width: 100%;
   }
@@ -5279,7 +5288,7 @@ td {
   .date-range-popover {
     left: 0;
     right: auto;
-    width: min(100%, 360px);
+    width: min(100%, 378px);
   }
 
   .date-analytics-grid {
