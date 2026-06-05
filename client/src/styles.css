@@ -6217,6 +6217,35 @@ td {
   white-space: normal;
 }
 
+.dashboard-shell .activity-list-item {
+  min-width: 0;
+}
+
+.dashboard-shell .activity-content {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dashboard-shell .activity-header-line {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.dashboard-shell .activity-time {
+  justify-self: end;
+  line-height: 1.35;
+  padding-top: 2px;
+  white-space: nowrap;
+}
+
+.dashboard-shell .activity-detail {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 1180px) {
   .dashboard-kpi-grid,
   .dashboard-insight-grid,
@@ -6267,8 +6296,13 @@ td {
   }
 
   .dashboard-shell .activity-header-line {
-    align-items: flex-start;
-    flex-direction: column;
+    gap: 5px;
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell .activity-time {
+    justify-self: start;
+    padding-top: 0;
   }
 
   .dashboard-panel-head {
