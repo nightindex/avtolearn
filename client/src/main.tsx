@@ -439,6 +439,8 @@ function Lessons({ data }: { data: AppData }) {
 }
 
 function roadSignDescription(sign: RoadSignItem, typeTitle: string) {
+  if (sign.description?.trim()) return clean(sign.description);
+
   if (sign.code === "1.1") {
     return (
       "Bu belgi aholi punktlarida yo'lning temir yo'l kesib o'tgan qismidan 50 - 100 metr oldin masofada o'rnatiladi. " +

@@ -8,6 +8,7 @@
     "dev:server": "node server/index.js",
     "dev:client": "vite --host 127.0.0.1 --port 5177 --strictPort",
     "download:subjects": "node tools/download-subjects.cjs",
+    "download:road-signs": "node tools/download-road-signs.cjs",
     "build": "tsc -b && vite build",
     "start": "node server/index.js"
   },

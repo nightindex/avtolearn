@@ -62,6 +62,7 @@ export type RoadSignItem = {
   code: string;
   title: string;
   image: string;
+  description?: string;
   previewImages?: string[];
   video?: string;
   audio?: string;

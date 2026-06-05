@@ -1052,6 +1052,7 @@ dd {
   font-weight: 400;
   line-height: 1.55;
   margin: 0;
+  white-space: pre-line;
 }
 
 .road-sign-modal-media {
