@@ -912,7 +912,7 @@ dd {
 
 .road-sign-modal-backdrop {
   align-items: center;
-  background: rgba(15, 23, 42, 0.48);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   inset: 0;
   justify-content: center;
@@ -923,105 +923,101 @@ dd {
 
 .road-sign-modal {
   background: #fff;
-  border: 1px solid #dfe8f2;
-  border-radius: 14px;
-  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.26);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.22);
   display: grid;
-  gap: 22px;
-  grid-template-columns: 260px minmax(0, 1fr);
-  max-height: calc(100vh - 48px);
-  max-width: 760px;
-  overflow: auto;
-  padding: 24px;
-  position: relative;
-  width: min(100%, 760px);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: min(82vh, 720px);
+  max-width: 880px;
+  overflow: hidden;
+  padding: 0;
+  width: min(100%, 880px);
+}
+
+.road-sign-modal-header {
+  align-items: center;
+  border-bottom: 1px solid #edf1f5;
+  display: flex;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 0 24px 0 18px;
+}
+
+.road-sign-modal-header h2 {
+  color: #263247;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.35;
+  margin: 0;
 }
 
 .road-sign-modal-close {
   align-items: center;
-  background: #fff;
-  border: 1px solid #dfe8f2;
-  border-radius: 9px;
-  color: #4b5870;
+  background: transparent;
+  border: 0;
+  color: #ff3864;
   display: flex;
-  height: 38px;
+  height: 34px;
   justify-content: center;
-  position: absolute;
-  right: 14px;
-  top: 14px;
-  width: 38px;
+  width: 34px;
+}
+
+.road-sign-modal-body {
+  overflow-y: auto;
+  padding: 26px;
+}
+
+.road-sign-modal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.road-sign-modal-body::-webkit-scrollbar-thumb {
+  background: #8f98aa;
+  border-radius: 999px;
+}
+
+.road-sign-modal-body::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .road-sign-modal-image {
   align-items: center;
-  background: #f8fbfe;
+  background: #fff;
   border: 1px solid #e8eef6;
-  border-radius: 12px;
+  border-radius: 8px;
   display: flex;
   justify-content: center;
-  min-height: 250px;
-  padding: 22px;
+  margin: 0 auto 22px;
+  min-height: 224px;
+  padding: 18px;
+  width: min(100%, 222px);
 }
 
 .road-sign-modal-image img {
-  max-height: 230px;
+  max-height: 190px;
   max-width: 100%;
   object-fit: contain;
 }
 
 .road-sign-modal-content {
   display: grid;
-  gap: 14px;
-  padding-right: 28px;
+  gap: 18px;
 }
 
-.road-sign-modal-content > span {
-  color: #008bb8;
-  font-size: 12px;
-  font-weight: 950;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-}
-
-.road-sign-modal-content h2 {
-  color: var(--navy);
-  font-size: 24px;
-  line-height: 1.2;
-  margin: 0;
-}
-
-.road-sign-modal-content dl {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 1fr;
-  margin: 0;
-}
-
-.road-sign-modal-content dl div {
-  background: #f8fbfe;
-  border: 1px solid #e8eef6;
-  border-radius: 10px;
-  padding: 11px 12px;
-}
-
-.road-sign-modal-content dt {
-  color: #7a8aa3;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.road-sign-modal-content dd {
+.road-sign-modal-content h3 {
   color: #263247;
-  font-size: 14px;
-  font-weight: 850;
-  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin: 0;
 }
 
 .road-sign-modal-content p {
-  color: #62728a;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.6;
+  color: #263247;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.55;
   margin: 0;
 }
 
@@ -1410,16 +1406,19 @@ td {
   }
 
   .road-sign-modal {
-    grid-template-columns: 1fr;
-    padding: 18px;
+    height: min(86vh, 720px);
   }
 
   .road-sign-modal-image {
-    min-height: 210px;
+    min-height: 200px;
   }
 
-  .road-sign-modal-content {
-    padding-right: 0;
+  .road-sign-modal-body {
+    padding: 18px;
+  }
+
+  .road-sign-modal-content p {
+    font-size: 15px;
   }
 
   .activity-row {

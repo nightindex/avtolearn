@@ -437,6 +437,21 @@ function Lessons({ data }: { data: AppData }) {
   );
 }
 
+function roadSignDescription(sign: RoadSignItem, typeTitle: string) {
+  if (sign.code === "1.1") {
+    return (
+      "Bu belgi aholi punktlarida yo'lning temir yo'l kesib o'tgan qismidan 50 - 100 metr oldin masofada o'rnatiladi. " +
+      "Bunday temir yo'l kesishmalari shlagbaum harakatni tartibga soluvchi svetofor va tovush moslamasi bilan jihozlangan bo'lib, " +
+      "kesishma orqali harakatlanishni temir yo'l navbatchisi nazorat qiladi. \"Shlagbaumli temir yo'l kesishmasi\" belgisi haydovchini " +
+      "yo'lning o'ta xavfli qismlari borligi haqida ogohlantirib, aholi punktlaridan tashqarida 150 - 300 metr oldin, shuningdek, xavf-xatarga " +
+      "50 metrdan kam bo'lmagan masofa qolganda takror o'rnatiladi. Yo'lning temir yo'l kesishmasi o'tgan qismidan, ehtiyot choralarini " +
+      "ko'rgan holda, ruxsat berilgandan keyin o'tishi kerak."
+    );
+  }
+
+  return `${clean(typeTitle)} bo'limidagi ushbu belgi haydovchini yo'l sharoiti haqida oldindan xabardor qiladi. Belgini ko'rgan haydovchi tezlikni, masofani va harakat yo'nalishini vaziyatga mos tanlashi kerak.`;
+}
+
 function RoadSigns({ data }: { data: AppData }) {
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
   const [selectedSign, setSelectedSign] = useState<RoadSignItem | null>(null);
@@ -529,35 +544,24 @@ function RoadSigns({ data }: { data: AppData }) {
               onClick={(event) => event.stopPropagation()}
               role="dialog"
             >
-              <button className="road-sign-modal-close" onClick={() => setSelectedSign(null)} aria-label="Yopish">
-                <X size={20} />
-              </button>
-              <div className="road-sign-modal-image">
-                <img src={asset(selectedSign.image)} alt={clean(selectedSign.title)} />
-              </div>
-              <div className="road-sign-modal-content">
-                <span>{selectedType.code}-bo'lim</span>
+              <header className="road-sign-modal-header">
                 <h2 id="road-sign-modal-title">
                   {selectedSign.code}. {clean(selectedSign.title)}
                 </h2>
-                <dl>
-                  <div>
-                    <dt>Belgi raqami</dt>
-                    <dd>{selectedSign.code}</dd>
-                  </div>
-                  <div>
-                    <dt>Bo'lim</dt>
-                    <dd>{clean(selectedType.title)}</dd>
-                  </div>
-                  <div>
-                    <dt>Manba</dt>
-                    <dd>EAVTOTA'LIM yo'l belgilari katalogi</dd>
-                  </div>
-                </dl>
-                <p>
-                  Ushbu belgi imtihon savollarida yo'l holatini aniqlash, xavfni oldindan ko'rish va to'g'ri
-                  harakat yo'nalishini tanlash uchun ishlatiladi.
-                </p>
+                <button className="road-sign-modal-close" onClick={() => setSelectedSign(null)} aria-label="Yopish">
+                  <X size={22} />
+                </button>
+              </header>
+              <div className="road-sign-modal-body">
+                <div className="road-sign-modal-image">
+                  <img src={asset(selectedSign.image)} alt={clean(selectedSign.title)} />
+                </div>
+                <div className="road-sign-modal-content">
+                  <h3>
+                    {selectedSign.code}. "{clean(selectedSign.title)}"
+                  </h3>
+                  <p>{roadSignDescription(selectedSign, selectedType.title)}</p>
+                </div>
               </div>
             </section>
           </div>
