@@ -38,6 +38,7 @@ import {
   Trophy,
   UserRound,
   Video,
+  Volume2,
   WalletCards,
   X,
 } from "lucide-react";
@@ -455,6 +456,7 @@ function roadSignDescription(sign: RoadSignItem, typeTitle: string) {
 function RoadSigns({ data }: { data: AppData }) {
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
   const [selectedSign, setSelectedSign] = useState<RoadSignItem | null>(null);
+  const [selectedPreviewIndex, setSelectedPreviewIndex] = useState(0);
   const [page, setPage] = useState(1);
   const selectedType = selectedTypeId ? data.signs.find((sign) => sign.id === selectedTypeId) : null;
   const selectedSigns = selectedTypeId ? data.roadSigns.filter((sign) => sign.typeId === selectedTypeId) : [];
@@ -465,6 +467,10 @@ function RoadSigns({ data }: { data: AppData }) {
   const openType = (id: number) => {
     setSelectedTypeId(id);
     setPage(1);
+  };
+  const openSign = (sign: RoadSignItem) => {
+    setSelectedSign(sign);
+    setSelectedPreviewIndex(0);
   };
 
   useEffect(() => {
@@ -500,7 +506,7 @@ function RoadSigns({ data }: { data: AppData }) {
                   <h3>
                     {sign.code}. {clean(sign.title)}
                   </h3>
-                  <button onClick={() => setSelectedSign(sign)}>To'liq ko'rish</button>
+                  <button onClick={() => openSign(sign)}>To'liq ko'rish</button>
                 </article>
               ))}
             </div>
@@ -535,37 +541,71 @@ function RoadSigns({ data }: { data: AppData }) {
           )}
         </section>
 
-        {selectedSign && (
-          <div className="road-sign-modal-backdrop" onClick={() => setSelectedSign(null)} role="presentation">
-            <section
-              aria-labelledby="road-sign-modal-title"
-              aria-modal="true"
-              className="road-sign-modal"
-              onClick={(event) => event.stopPropagation()}
-              role="dialog"
-            >
-              <header className="road-sign-modal-header">
-                <h2 id="road-sign-modal-title">
-                  {selectedSign.code}. {clean(selectedSign.title)}
-                </h2>
-                <button className="road-sign-modal-close" onClick={() => setSelectedSign(null)} aria-label="Yopish">
-                  <X size={22} />
-                </button>
-              </header>
-              <div className="road-sign-modal-body">
-                <div className="road-sign-modal-image">
-                  <img src={asset(selectedSign.image)} alt={clean(selectedSign.title)} />
+        {selectedSign && (() => {
+          const previewImages = selectedSign.previewImages?.length ? selectedSign.previewImages : [selectedSign.image];
+          const activePreview = previewImages[Math.min(selectedPreviewIndex, previewImages.length - 1)] ?? selectedSign.image;
+          return (
+            <div className="road-sign-modal-backdrop" onClick={() => setSelectedSign(null)} role="presentation">
+              <section
+                aria-labelledby="road-sign-modal-title"
+                aria-modal="true"
+                className="road-sign-modal"
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+              >
+                <header className="road-sign-modal-header">
+                  <h2 id="road-sign-modal-title">
+                    {selectedSign.code}. {clean(selectedSign.title)}
+                  </h2>
+                  <button className="road-sign-modal-close" onClick={() => setSelectedSign(null)} aria-label="Yopish">
+                    <X size={22} />
+                  </button>
+                </header>
+                <div className="road-sign-modal-body">
+                  <div className="road-sign-modal-preview">
+                    <img src={asset(activePreview)} alt={clean(selectedSign.title)} />
+                  </div>
+                  {previewImages.length > 1 && (
+                    <div className="road-sign-modal-thumbs" aria-label="Rasm variantlari">
+                      {previewImages.map((image, index) => (
+                        <button
+                          className={index === selectedPreviewIndex ? "active" : ""}
+                          key={`${selectedSign.id}-${image}`}
+                          onClick={() => setSelectedPreviewIndex(index)}
+                          type="button"
+                        >
+                          <img src={asset(image)} alt={`${clean(selectedSign.title)} ${index + 1}`} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="road-sign-modal-content">
+                    <h3>
+                      {selectedSign.code}. "{clean(selectedSign.title)}"
+                    </h3>
+                    <p>{roadSignDescription(selectedSign, selectedType.title)}</p>
+                  </div>
+                  {(selectedSign.video || selectedSign.audio) && (
+                    <div className="road-sign-modal-media">
+                      {selectedSign.video && (
+                        <div className="road-sign-media-block">
+                          <span><Video size={16} /> Video izoh</span>
+                          <video src={asset(selectedSign.video)} controls preload="metadata" />
+                        </div>
+                      )}
+                      {selectedSign.audio && (
+                        <div className="road-sign-media-block">
+                          <span><Volume2 size={16} /> Audio izoh</span>
+                          <audio src={asset(selectedSign.audio)} controls preload="metadata" />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="road-sign-modal-content">
-                  <h3>
-                    {selectedSign.code}. "{clean(selectedSign.title)}"
-                  </h3>
-                  <p>{roadSignDescription(selectedSign, selectedType.title)}</p>
-                </div>
-              </div>
-            </section>
-          </div>
-        )}
+              </section>
+            </div>
+          );
+        })()}
       </div>
     );
   }
