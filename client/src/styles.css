@@ -779,6 +779,145 @@ dd {
   width: 100%;
 }
 
+.sign-card.clickable {
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.sign-card.clickable:hover,
+.sign-card.clickable:focus-visible {
+  border-color: #b9d4ef;
+  box-shadow: 0 12px 28px rgba(19, 45, 91, 0.08);
+  outline: 0;
+  transform: translateY(-2px);
+}
+
+.road-sign-detail-page {
+  max-width: 1280px;
+}
+
+.road-sign-detail-header {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  padding: 16px;
+}
+
+.road-sign-back {
+  border-radius: 8px;
+  min-height: 42px;
+  padding: 9px 12px;
+}
+
+.road-sign-detail-header h2 {
+  color: #5b6472;
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: 0.2px;
+  margin: 0;
+}
+
+.road-sign-detail-header p {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  margin: 4px 0 0;
+}
+
+.road-sign-detail-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.road-sign-detail-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.road-sign-detail-item {
+  border: 1px solid #e6edf5;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.road-sign-detail-image {
+  align-items: center;
+  display: flex;
+  height: 110px;
+  justify-content: center;
+}
+
+.road-sign-detail-image img {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.road-sign-detail-item h3 {
+  color: #263247;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.35;
+  margin: 0;
+  min-height: 38px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.road-sign-detail-item button {
+  background: #1e91ef;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  min-height: 36px;
+}
+
+.road-sign-pagination {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.road-sign-pagination button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dbe5ef;
+  border-radius: 5px;
+  color: #263247;
+  display: inline-flex;
+  font-weight: 800;
+  height: 30px;
+  justify-content: center;
+  min-width: 34px;
+  padding: 0 9px;
+}
+
+.road-sign-pagination button.active {
+  border-color: #1e91ef;
+  color: #1e91ef;
+}
+
+.road-sign-pagination button:disabled {
+  color: #b6c1cf;
+  cursor: not-allowed;
+}
+
+.rotate-90 {
+  transform: rotate(90deg);
+}
+
+.rotate-270 {
+  transform: rotate(-90deg);
+}
+
 .media-card video,
 .question-video {
   background: #101827;
@@ -1063,6 +1202,10 @@ td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .road-sign-detail-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .activity-layout,
   .placeholder-grid {
     grid-template-columns: 1fr;
@@ -1133,6 +1276,18 @@ td {
   .section-grid,
   .media-grid {
     grid-template-columns: 1fr;
+  }
+
+  .road-sign-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .road-sign-detail-header {
+    align-items: flex-start;
+  }
+
+  .road-sign-pagination {
+    justify-content: center;
   }
 
   .activity-row {

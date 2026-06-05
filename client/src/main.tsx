@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  ArrowLeft,
   ArrowRight,
   Award,
   Bell,
@@ -437,12 +438,96 @@ function Lessons({ data }: { data: AppData }) {
 }
 
 function RoadSigns({ data }: { data: AppData }) {
+  const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const selectedType = selectedTypeId ? data.signs.find((sign) => sign.id === selectedTypeId) : null;
+  const selectedSigns = selectedTypeId ? data.roadSigns.filter((sign) => sign.typeId === selectedTypeId) : [];
+  const pageSize = 12;
+  const totalPages = Math.max(1, Math.ceil(selectedSigns.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const visibleSigns = selectedSigns.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const openType = (id: number) => {
+    setSelectedTypeId(id);
+    setPage(1);
+  };
+
+  if (selectedType) {
+    return (
+      <div className="page-shell road-sign-detail-page">
+        <section className="road-sign-detail-header card">
+          <button className="ghost-button road-sign-back" onClick={() => setSelectedTypeId(null)}>
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h2>{clean(selectedType.title).toUpperCase()}</h2>
+            <p>{selectedSigns.length || selectedType.count} ta belgi</p>
+          </div>
+        </section>
+
+        <section className="road-sign-detail-card card">
+          {visibleSigns.length ? (
+            <div className="road-sign-detail-grid">
+              {visibleSigns.map((sign) => (
+                <article className="road-sign-detail-item" key={sign.id}>
+                  <div className="road-sign-detail-image">
+                    <img src={asset(sign.image)} alt={clean(sign.title)} />
+                  </div>
+                  <h3>
+                    {sign.code}. {clean(sign.title)}
+                  </h3>
+                  <button>To'liq ko'rish</button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <Search size={24} />
+              <p>Bu bo'lim uchun belgilar hali lokal bazaga qo'shilmagan.</p>
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="road-sign-pagination" aria-label="Belgilar sahifalari">
+              <button disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+                <ChevronDown className="rotate-90" size={18} />
+              </button>
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                <button
+                  className={pageNumber === currentPage ? "active" : ""}
+                  key={pageNumber}
+                  onClick={() => setPage(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              >
+                <ChevronDown className="rotate-270" size={18} />
+              </button>
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="page-shell">
       <PageHeader title="Yo'l belgilari" subtitle="Belgilar katalogi va imtihonlarda uchraydigan vizual holatlar." />
       <div className="section-grid">
         {data.signs.map((sign) => (
-          <article className="card sign-card" key={sign.id}>
+          <article
+            className="card sign-card clickable"
+            key={sign.id}
+            onClick={() => openType(sign.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") openType(sign.id);
+            }}
+            role="button"
+            tabIndex={0}
+          >
             <img src={asset(sign.image)} alt="" />
             <h3>{clean(sign.title)}</h3>
             <p>{sign.count} ta belgi</p>
