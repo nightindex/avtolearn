@@ -42,7 +42,7 @@ import {
   X,
 } from "lucide-react";
 import { askTutor, getData, getProgressSummary, getQuestions, getRecentProgress, getTemplates, saveQuestionProgress, saveTemplate, saveTestAttempt } from "./api";
-import type { AppData, ProgressSummary, Question, QuestionResponse, RecentProgressItem, TestTemplate } from "./types";
+import type { AppData, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate } from "./types";
 import "./styles.css";
 import { Dashboard } from "./components/Dashboard";
 
@@ -439,6 +439,7 @@ function Lessons({ data }: { data: AppData }) {
 
 function RoadSigns({ data }: { data: AppData }) {
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
+  const [selectedSign, setSelectedSign] = useState<RoadSignItem | null>(null);
   const [page, setPage] = useState(1);
   const selectedType = selectedTypeId ? data.signs.find((sign) => sign.id === selectedTypeId) : null;
   const selectedSigns = selectedTypeId ? data.roadSigns.filter((sign) => sign.typeId === selectedTypeId) : [];
@@ -450,6 +451,15 @@ function RoadSigns({ data }: { data: AppData }) {
     setSelectedTypeId(id);
     setPage(1);
   };
+
+  useEffect(() => {
+    if (!selectedSign) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedSign(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedSign]);
 
   if (selectedType) {
     return (
@@ -475,7 +485,7 @@ function RoadSigns({ data }: { data: AppData }) {
                   <h3>
                     {sign.code}. {clean(sign.title)}
                   </h3>
-                  <button>To'liq ko'rish</button>
+                  <button onClick={() => setSelectedSign(sign)}>To'liq ko'rish</button>
                 </article>
               ))}
             </div>
@@ -509,6 +519,49 @@ function RoadSigns({ data }: { data: AppData }) {
             </div>
           )}
         </section>
+
+        {selectedSign && (
+          <div className="road-sign-modal-backdrop" onClick={() => setSelectedSign(null)} role="presentation">
+            <section
+              aria-labelledby="road-sign-modal-title"
+              aria-modal="true"
+              className="road-sign-modal"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+            >
+              <button className="road-sign-modal-close" onClick={() => setSelectedSign(null)} aria-label="Yopish">
+                <X size={20} />
+              </button>
+              <div className="road-sign-modal-image">
+                <img src={asset(selectedSign.image)} alt={clean(selectedSign.title)} />
+              </div>
+              <div className="road-sign-modal-content">
+                <span>{selectedType.code}-bo'lim</span>
+                <h2 id="road-sign-modal-title">
+                  {selectedSign.code}. {clean(selectedSign.title)}
+                </h2>
+                <dl>
+                  <div>
+                    <dt>Belgi raqami</dt>
+                    <dd>{selectedSign.code}</dd>
+                  </div>
+                  <div>
+                    <dt>Bo'lim</dt>
+                    <dd>{clean(selectedType.title)}</dd>
+                  </div>
+                  <div>
+                    <dt>Manba</dt>
+                    <dd>EAVTOTA'LIM yo'l belgilari katalogi</dd>
+                  </div>
+                </dl>
+                <p>
+                  Ushbu belgi imtihon savollarida yo'l holatini aniqlash, xavfni oldindan ko'rish va to'g'ri
+                  harakat yo'nalishini tanlash uchun ishlatiladi.
+                </p>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     );
   }
