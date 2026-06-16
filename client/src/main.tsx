@@ -56,6 +56,9 @@ import { askTutor, getData, getProgressSummary, getQuestions, getRecentProgress,
 import type { AppData, Penalty, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate, Topic } from "./types";
 import "./styles.css";
 import { Dashboard } from "./components/Dashboard";
+import { AppLanguage, languages, languageDescriptions, translateUi } from "./utils/i18n";
+import { LoginPage } from "./components/LoginPage";
+import { LanguageSelector } from "./components/LanguageSelector";
 
 type View =
   | "home"
@@ -134,19 +137,7 @@ const viewTitles: Record<View, string> = {
   profile: "Profil",
 };
 
-type AppLanguage = "uz" | "uz-cyrl" | "ru";
-
-const languages: { id: AppLanguage; short: string; label: string }[] = [
-  { id: "uz", short: "UZ", label: "O'zbek" },
-  { id: "uz-cyrl", short: "Ўз", label: "Ўзбек" },
-  { id: "ru", short: "RU", label: "Русский" },
-];
-
-const languageDescriptions: Record<AppLanguage, string> = {
-  uz: "Lotin",
-  "uz-cyrl": "Кирилл",
-  ru: "Рус",
-};
+// AppLanguage, languages, and languageDescriptions are now imported from ./utils/i18n
 
 const profileUser = {
   name: "I.MUXTOROV",
@@ -159,239 +150,8 @@ const profileUser = {
 const AUTH_STORAGE_KEY = "avtolearn-authenticated";
 const DEMO_EMAIL = profileUser.email;
 const DEMO_PASSWORD = "avtolearn2026";
+// Translation utility functions and dictionaries are imported from ./utils/i18n
 
-const ruDictionary: Record<string, string> = {
-  "O'qish": "Обучение",
-  "Testlar": "Тесты",
-  "Natijalar": "Результаты",
-  "Bosh sahifa": "Главная",
-  "Darslar": "Уроки",
-  "Yo'l belgilari": "Дорожные знаки",
-  "Jarimalar": "Штрафы",
-  "Avtodrom": "Автодром",
-  "Shablon testlar": "Тесты по шаблонам",
-  "Aralash testlar": "Смешанные тесты",
-  "Barcha testlar": "Все тесты",
-  "Saqlangan": "Сохраненные",
-  "Saqlangan testlar": "Сохраненные тесты",
-  "Yakuniy imtihon": "Итоговый экзамен",
-  "Rayting": "Рейтинг",
-  "Murojaat": "Обращение",
-  "Murojaatlar": "Обращения",
-  "Avtodrom qo'llanmasi": "Руководство по автодрому",
-  "Online": "Онлайн",
-  "Qidiruv...": "Поиск...",
-  "Natija topilmadi": "Ничего не найдено",
-  "Kunduzgi rejim": "Светлая тема",
-  "Tungi rejim": "Темная тема",
-  "Bildirishnoma": "Уведомления",
-  "Imtihon rejimi": "Режим экзамена",
-  "Davom ettirish": "Продолжить",
-  "Boshlash uchun shablon tanlang": "Выберите шаблон для старта",
-  "shablon": "шаблон",
-  "daqiqa": "минут",
-  "savol": "вопросов",
-  "eng yaxshi": "лучший",
-  "yakunlangan": "завершено",
-  "Qidirish": "Поиск",
-  "Holat": "Статус",
-  "Saralash": "Сортировка",
-  "Barchasi": "Все",
-  "Yakunlangan": "Завершенные",
-  "Boshlanmagan": "Не начатые",
-  "Zaif natija": "Слабый результат",
-  "Yangi": "Новый",
-  "Zaif": "Слабый",
-  "Boshlash": "Начать",
-  "Yana ko'rsatish": "Показать еще",
-  "Imtihonga tayyorlanish": "Подготовка к экзамену",
-  "Til": "Язык",
-  "O'zbek": "Узбекский",
-  "Кирилл": "Кириллица",
-  "Рус": "Русский",
-  "Bekor qilish": "Отмена",
-  "Imtihonni boshlash": "Начать экзамен",
-  "Test markazi": "Центр тестов",
-  "Adaptive practice": "Адаптивная практика",
-  "Tezkor mashq": "Быстрая тренировка",
-  "Chuqur mashq": "Глубокая тренировка",
-  "Marafon": "Марафон",
-  "Tayyorlik": "Готовность",
-  "To'g'ri javoblar": "Правильные ответы",
-  "Noto'g'ri javoblar": "Неправильные ответы",
-  "Jami ishlangan testlar": "Всего выполнено тестов",
-  "Jami savollar": "Всего вопросов",
-  "Tanlangan vaqt": "Выбранное время",
-  "Aniqlik": "Точность",
-  "Yaratilgan vaqt": "Время создания",
-  "Yangilangan vaqt": "Время обновления",
-  "Test sozlamasi": "Настройки теста",
-  "Tezkor": "Быстрый",
-  "Standart": "Стандарт",
-  "Yangi test boshlash": "Начать новый тест",
-  "ta savol": "вопросов",
-  "sahifa": "страница",
-  "ko'rildi": "просмотрено",
-  "Faqat video": "Только видео",
-  "AI izoh": "AI пояснение",
-  "Saqlash": "Сохранить",
-  "Vizual materiallar": "Визуальные материалы",
-  "Rasm": "Изображение",
-  "Video": "Видео",
-  "Javob variantlari": "Варианты ответов",
-  "Video javob": "Видеоответ",
-  "Avval javobni tanlang, keyin video izoh ochiladi.": "Сначала выберите ответ, затем откроется видеообъяснение.",
-  "Exam center": "Экзаменационный центр",
-  "O'qishni davom ettiring": "Продолжайте обучение",
-  "Keyingi qadam": "Следующий шаг",
-  "Savol qamrovi": "Охват вопросов",
-  "O'rtacha aniqlik": "Средняя точность",
-  "Test urinishlari": "Попытки тестов",
-  "Eng yaxshi natija": "Лучший результат",
-  "O'quv progressi": "Учебный прогресс",
-  "Qamrov": "Охват",
-  "Javoblar": "Ответы",
-  "Profil": "Профиль",
-  "Profil va sozlamalar": "Профиль и настройки",
-  "Shaxsiy kabinet, o'quv natijalari va asosiy sozlamalar bir joyda.": "Личный кабинет, учебные результаты и основные настройки в одном месте.",
-  "Hisob ma'lumotlari": "Данные аккаунта",
-  "O'quv ko'rsatkichlari": "Учебные показатели",
-  "Oxirgi faollik": "Последняя активность",
-  "Asosiy bo'limlar": "Основные разделы",
-  "F.I.Sh.": "Ф.И.О.",
-  "Rol": "Роль",
-  "Til rejimi": "Режим языка",
-  "Interfeys": "Интерфейс",
-  "Mahalliy profil": "Локальный профиль",
-  "Administrator": "Администратор",
-  "Faol": "Активен",
-  "Lotin yozuvi": "Латиница",
-  "Kirill yozuvi": "Кириллица",
-  "Tezkor o'tish": "Быстрый переход",
-  "Saqlangan savollar va shablonlarni qayta ko'ring.": "Пересмотрите сохраненные вопросы и шаблоны.",
-  "AI tutor bilan qiyin savollarni tahlil qiling.": "Разберите сложные вопросы с AI tutor.",
-  "Mavzular, testlar va progress bo'yicha umumiy markaz.": "Единый центр по темам, тестам и прогрессу.",
-  "Tungi mavzu yoqilgan": "Темная тема включена",
-  "Kunduzgi mavzu yoqilgan": "Светлая тема включена",
-  "Hozircha faollik qayd etilmagan.": "Активность пока не зафиксирована.",
-  "Hisob": "Аккаунт",
-  "AI yordam": "AI помощь",
-  "Chiqish": "Выйти",
-  "Login sahifasiga qaytish": "Вернуться на страницу входа",
-  "AvtoLearn kabinetiga kirish": "Войти в кабинет AvtoLearn",
-  "Testlar, progress va AI tutor bir joyda.": "Тесты, прогресс и AI tutor в одном месте.",
-  "Email manzil": "Email адрес",
-  "Parol": "Пароль",
-  "Parolni ko'rsatish": "Показать пароль",
-  "Parolni yashirish": "Скрыть пароль",
-  "Eslab qolish": "Запомнить меня",
-  "Kirish": "Войти",
-  "Kirish tekshirilmoqda...": "Проверка входа...",
-  "Demo kirish": "Демо вход",
-  "Email va parolni kiriting.": "Введите email и пароль.",
-  "Email formati noto'g'ri.": "Неверный формат email.",
-  "Demo email yoki parol noto'g'ri.": "Неверный demo email или пароль.",
-  "O'quv platformasi": "Учебная платформа",
-  "Mahalliy demo": "Локальное demo",
-  "Bugungi mashg'ulotga tayyormisiz?": "Готовы к сегодняшней тренировке?",
-  "Shaxsiy progress, saqlangan testlar va AI yordamchi bilan tezkor kirish.": "Быстрый доступ к личному прогрессу, сохраненным тестам и AI помощнику.",
-  "Savollar bazasi": "База вопросов",
-  "AI izohlar": "AI пояснения",
-};
-
-const cyrillicDictionary: Record<string, string> = {
-  "O'qish": "Ўқиш",
-  "Yo'l belgilari": "Йўл белгилари",
-  "AI Tutor": "AI Tutor",
-  "Online": "Онлайн",
-  "UZ": "UZ",
-  "RU": "RU",
-};
-
-const cyrillicPairs: [string, string][] = [
-  ["O'", "Ў"],
-  ["G'", "Ғ"],
-  ["Sh", "Ш"],
-  ["Ch", "Ч"],
-  ["Yo", "Йў"],
-  ["Yu", "Ю"],
-  ["Ya", "Я"],
-  ["Ye", "Е"],
-  ["o'", "ў"],
-  ["g'", "ғ"],
-  ["sh", "ш"],
-  ["ch", "ч"],
-  ["yo", "йў"],
-  ["yu", "ю"],
-  ["ya", "я"],
-  ["ye", "е"],
-  ["A", "А"],
-  ["B", "Б"],
-  ["D", "Д"],
-  ["E", "Э"],
-  ["F", "Ф"],
-  ["G", "Г"],
-  ["H", "Ҳ"],
-  ["I", "И"],
-  ["J", "Ж"],
-  ["K", "К"],
-  ["L", "Л"],
-  ["M", "М"],
-  ["N", "Н"],
-  ["O", "О"],
-  ["P", "П"],
-  ["Q", "Қ"],
-  ["R", "Р"],
-  ["S", "С"],
-  ["T", "Т"],
-  ["U", "У"],
-  ["V", "В"],
-  ["X", "Х"],
-  ["Y", "Й"],
-  ["Z", "З"],
-  ["a", "а"],
-  ["b", "б"],
-  ["d", "д"],
-  ["e", "е"],
-  ["f", "ф"],
-  ["g", "г"],
-  ["h", "ҳ"],
-  ["i", "и"],
-  ["j", "ж"],
-  ["k", "к"],
-  ["l", "л"],
-  ["m", "м"],
-  ["n", "н"],
-  ["o", "о"],
-  ["p", "п"],
-  ["q", "қ"],
-  ["r", "р"],
-  ["s", "с"],
-  ["t", "т"],
-  ["u", "у"],
-  ["v", "в"],
-  ["x", "х"],
-  ["y", "й"],
-  ["z", "з"],
-];
-
-function toUzbekCyrillic(value: string) {
-  let output = value;
-  for (const [latin, cyrillic] of cyrillicPairs) {
-    output = output.replaceAll(latin, cyrillic);
-  }
-  return output;
-}
-
-function translateUi(value: string, language: AppLanguage) {
-  if (language === "uz") return value;
-  const leading = value.match(/^\s*/)?.[0] ?? "";
-  const trailing = value.match(/\s*$/)?.[0] ?? "";
-  const core = value.trim();
-  if (!core) return value;
-  if (language === "ru") return `${leading}${ruDictionary[core] ?? core}${trailing}`;
-  return `${leading}${cyrillicDictionary[core] ?? toUzbekCyrillic(core)}${trailing}`;
-}
 
 function getStoredLanguage(): AppLanguage {
   const stored = localStorage.getItem("language");
@@ -586,6 +346,7 @@ function App() {
         darkMode={darkMode}
         language={language}
         onLogin={completeLogin}
+        setLanguage={setLanguage}
         toggleTheme={() => setDarkMode((value) => !value)}
       />
     );
@@ -791,11 +552,9 @@ function Topbar({
   onLogout: () => void;
 }) {
   const searchRef = useRef<HTMLDivElement>(null);
-  const languageRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
-  const [languageOpen, setLanguageOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
@@ -847,16 +606,7 @@ function Topbar({
     return () => document.removeEventListener("mousedown", onClick);
   }, [showDropdown]);
 
-  useEffect(() => {
-    if (!languageOpen) return;
-    const onClick = (e: MouseEvent) => {
-      if (languageRef.current && !languageRef.current.contains(e.target as Node)) {
-        setLanguageOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [languageOpen]);
+
 
   useEffect(() => {
     if (!notificationOpen) return;
@@ -952,43 +702,11 @@ function Topbar({
         >
           {darkMode ? <Sun size={18} /> : <Moon size={18} />}
         </button>
-        <div className="language-menu" data-no-translate ref={languageRef}>
-          <button
-            aria-expanded={languageOpen}
-            aria-haspopup="menu"
-            className={`language ${languageOpen ? "open" : ""}`}
-            onClick={() => setLanguageOpen((open) => !open)}
-            type="button"
-          >
-            <span className="language-leading">
-              <Globe size={15} />
-              <strong>{activeLanguage.short}</strong>
-            </span>
-            <ChevronDown className="language-chevron" size={14} />
-          </button>
-          {languageOpen && (
-            <div className="language-options" role="menu">
-              {languages.map((item) => (
-                <button
-                  className={item.id === language ? "active" : ""}
-                  key={item.id}
-                  onClick={() => {
-                    setLanguage(item.id);
-                    setLanguageOpen(false);
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  <span>{item.short}</span>
-                  <div className="language-option-copy">
-                    <strong>{item.label}</strong>
-                    <small>{languageDescriptions[item.id]}</small>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <LanguageSelector
+          language={language}
+          setLanguage={setLanguage}
+          variant="topbar"
+        />
         <button
           aria-pressed={isFullscreen}
           className={`icon-button topbar-tool ${isFullscreen ? "active" : ""}`}
@@ -1095,165 +813,7 @@ function Topbar({
   );
 }
 
-function LoginPage({
-  darkMode,
-  language,
-  onLogin,
-  toggleTheme,
-}: {
-  darkMode: boolean;
-  language: AppLanguage;
-  onLogin: () => void;
-  toggleTheme: () => void;
-}) {
-  const [email, setEmail] = useState(DEMO_EMAIL);
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const canSubmit = email.trim().length > 0 && password.trim().length > 0 && !loading;
-
-  const submitLogin = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      setError(translateUi("Email va parolni kiriting.", language));
-      return;
-    }
-    if (!emailValid) {
-      setError(translateUi("Email formati noto'g'ri.", language));
-      return;
-    }
-    if (email.trim().toLowerCase() !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
-      setError(translateUi("Demo email yoki parol noto'g'ri.", language));
-      return;
-    }
-    setError("");
-    setLoading(true);
-    window.setTimeout(() => {
-      localStorage.setItem("avtolearn-remember-login", remember ? "true" : "false");
-      setLoading(false);
-      onLogin();
-    }, 360);
-  };
-
-  return (
-    <main className={`login-page ${darkMode ? "theme-dark" : "theme-light"}`}>
-      <section className="login-brand-panel">
-        <div className="login-brand">
-          <img src={LOGO_PATH} alt="AvtoLearn" />
-          <div>
-            <strong>AVTOLEARN</strong>
-            <span>{translateUi("O'quv platformasi", language)}</span>
-          </div>
-        </div>
-        <div className="login-hero-copy">
-          <span>{translateUi("Mahalliy demo", language)}</span>
-          <h1>{translateUi("Bugungi mashg'ulotga tayyormisiz?", language)}</h1>
-          <p>{translateUi("Shaxsiy progress, saqlangan testlar va AI yordamchi bilan tezkor kirish.", language)}</p>
-        </div>
-        <div className="login-feature-grid">
-          <article>
-            <strong>1 000+</strong>
-            <span>{translateUi("Savollar bazasi", language)}</span>
-          </article>
-          <article>
-            <strong>AI</strong>
-            <span>{translateUi("AI izohlar", language)}</span>
-          </article>
-          <article>
-            <strong>24/7</strong>
-            <span>{translateUi("Online", language)}</span>
-          </article>
-        </div>
-      </section>
-
-      <section className="login-card-wrap">
-        <button
-          className={`icon-button login-theme-toggle ${darkMode ? "active" : ""}`}
-          onClick={toggleTheme}
-          title={translateUi(darkMode ? "Kunduzgi rejim" : "Tungi rejim", language)}
-          type="button"
-        >
-          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
-
-        <form className="login-card" onSubmit={submitLogin}>
-          <div className="login-card-head">
-            <span className="login-lock"><Lock size={20} /></span>
-            <div>
-              <h2>{translateUi("AvtoLearn kabinetiga kirish", language)}</h2>
-              <p>{translateUi("Testlar, progress va AI tutor bir joyda.", language)}</p>
-            </div>
-          </div>
-
-          <label className="login-field">
-            <span>{translateUi("Email manzil", language)}</span>
-            <div>
-              <Mail size={17} />
-              <input
-                autoComplete="email"
-                inputMode="email"
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  setError("");
-                }}
-                placeholder={DEMO_EMAIL}
-                type="email"
-                value={email}
-              />
-            </div>
-          </label>
-
-          <label className="login-field">
-            <span>{translateUi("Parol", language)}</span>
-            <div>
-              <Lock size={17} />
-              <input
-                autoComplete="current-password"
-                onChange={(event) => {
-                  setPassword(event.target.value);
-                  setError("");
-                }}
-                placeholder={DEMO_PASSWORD}
-                type={showPassword ? "text" : "password"}
-                value={password}
-              />
-              <button
-                aria-label={translateUi(showPassword ? "Parolni yashirish" : "Parolni ko'rsatish", language)}
-                onClick={() => setShowPassword((value) => !value)}
-                type="button"
-              >
-                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-              </button>
-            </div>
-          </label>
-
-          <div className="login-options">
-            <label>
-              <input checked={remember} onChange={(event) => setRemember(event.target.checked)} type="checkbox" />
-              <span>{translateUi("Eslab qolish", language)}</span>
-            </label>
-            <span>{translateUi("Demo kirish", language)}</span>
-          </div>
-
-          {error && <p className="login-error">{error}</p>}
-
-          <button className="login-submit" disabled={!canSubmit} type="submit">
-            {loading ? translateUi("Kirish tekshirilmoqda...", language) : translateUi("Kirish", language)}
-          </button>
-
-          <div className="login-demo">
-            <span>{translateUi("Demo kirish", language)}</span>
-            <strong>{DEMO_EMAIL}</strong>
-            <strong>{DEMO_PASSWORD}</strong>
-          </div>
-        </form>
-      </section>
-    </main>
-  );
-}
+// LoginPage is now imported from "./components/LoginPage"
 
 function PageHeader({
   eyebrow,
