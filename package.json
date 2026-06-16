@@ -26,5 +26,10 @@
     "@types/node": "^24.10.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3"
-  }
+  },
+  "description": "Modern local-first driving education dashboard inspired by Eavtota'lim.",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

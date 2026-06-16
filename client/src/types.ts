@@ -20,6 +20,13 @@ export type Topic = {
   type: number;
   questionCount: number;
   timeLimit?: number;
+  contents?: TopicContent[];
+};
+
+export type TopicContent = {
+  id: number;
+  type: number;
+  content: string;
 };
 
 export type Answer = {

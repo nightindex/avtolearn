@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowLeft,
@@ -43,8 +43,8 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { askTutor, getData, getProgressSummary, getQuestions, getRecentProgress, getTemplates, saveQuestionProgress, saveTemplate, saveTestAttempt } from "./api";
-import type { AppData, Penalty, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate } from "./types";
+import { askTutor, getData, getProgressSummary, getQuestions, getRecentProgress, getSavedQuestions, getTemplates, saveQuestion, saveQuestionProgress, saveTemplate, saveTestAttempt } from "./api";
+import type { AppData, Penalty, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate, Topic } from "./types";
 import "./styles.css";
 import { Dashboard } from "./components/Dashboard";
 
@@ -61,23 +61,21 @@ type View =
   | "all-tests"
   | "saved-tests"
   | "final-exam"
-  | "media"
   | "ai";
 
 const navGroups = [
   {
-    title: "Learning",
+    title: "O'qish",
     items: [
       { id: "home", label: "Bosh sahifa", icon: Home },
       { id: "lessons", label: "Darslar", icon: BookOpen },
       { id: "road-signs", label: "Yo'l belgilari", icon: Hand },
       { id: "penalties", label: "Jarimalar", icon: Scale },
       { id: "autodrome", label: "Avtodrom", icon: Flag },
-      { id: "media", label: "Media", icon: Video },
     ],
   },
   {
-    title: "Tests",
+    title: "Testlar",
     items: [
       { id: "template-tests", label: "Shablon testlar", icon: ClipboardList },
       { id: "random-tests", label: "Aralash testlar", icon: Sparkles },
@@ -87,7 +85,7 @@ const navGroups = [
     ],
   },
   {
-    title: "Progress",
+    title: "Natijalar",
     items: [
       { id: "group", label: "Guruh", icon: UserRound },
       { id: "appeals", label: "Murojaat", icon: FileText },
@@ -100,6 +98,14 @@ const navGroups = [
 ] as const;
 
 type NavItem = (typeof navGroups)[number]["items"][number];
+
+type RandomTestConfig = {
+  count: number;
+  seed: string;
+  durationMinutes: number;
+  startedAt: string;
+  label?: string;
+};
 
 const viewTitles: Record<View, string> = {
   home: "Bosh sahifa",
@@ -114,7 +120,6 @@ const viewTitles: Record<View, string> = {
   "all-tests": "Barcha testlar",
   "saved-tests": "Saqlangan testlar",
   "final-exam": "Yakuniy imtihon",
-  media: "Media kutubxona",
   ai: "AI Tutor",
 };
 
@@ -130,6 +135,61 @@ function clean(value: string) {
     .replaceAll("вЂ”", "-");
 }
 
+function backendAsset(path: string) {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  if (path.startsWith("/files/")) return `https://back.eavtotalim.uz${path}`;
+  return asset(path);
+}
+
+function sanitizeTopicHtml(html: string) {
+  return html
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+    .replace(/javascript:/gi, "");
+}
+
+function isImageContent(value: string) {
+  return /\.(png|jpe?g|gif|webp|svg)$/i.test(value.split("?")[0]);
+}
+
+function compareCode(a: string, b: string) {
+  const left = a.split(".").map((part) => Number(part.replace(/\D/g, "")) || 0);
+  const right = b.split(".").map((part) => Number(part.replace(/\D/g, "")) || 0);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (left[index] ?? 0) - (right[index] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return a.localeCompare(b, "uz");
+}
+
+function effectiveSignCode(sign: RoadSignItem) {
+  const titleCode = sign.title.match(/^\s*(\d+(?:\.\d+)*)/)?.[1];
+  if (titleCode && !sign.code.includes(".")) {
+    return `${sign.typeId}.${titleCode}`;
+  }
+  return sign.code;
+}
+
+function displaySignCode(sign: RoadSignItem) {
+  const effective = effectiveSignCode(sign);
+  return effective === sign.code ? sign.code : effective;
+}
+
+function uniquePreviewImages(sign: RoadSignItem) {
+  const previews = sign.previewImages?.length ? sign.previewImages : [sign.image];
+  const unique = Array.from(new Set(previews.filter(Boolean)));
+  const codeSlug = `${sign.typeId}-${sign.code}`;
+  const duplicateSignArt =
+    unique.length === 2 &&
+    unique.some((image) => image.includes(`/items/${codeSlug}`)) &&
+    unique.some((image) => image.includes(`/content/${codeSlug}`));
+  return duplicateSignArt ? [sign.image] : unique;
+}
+
 function App() {
   const [data, setData] = useState<AppData | null>(null);
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
@@ -140,10 +200,21 @@ function App() {
   const [questionForTutor, setQuestionForTutor] = useState<Question | null>(null);
   const [tutorOpen, setTutorOpen] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<TestTemplate | null>(null);
+  const [activeRandomTest, setActiveRandomTest] = useState<RandomTestConfig | null>(null);
+  const [activeFinalExam, setActiveFinalExam] = useState<RandomTestConfig | null>(null);
 
   useEffect(() => {
     getData().then(setData).catch(console.error);
     refreshProgress();
+  }, []);
+
+  const navigateTo = useCallback((next: View) => {
+    setView(next);
+    if (next !== "template-tests") setActiveTemplate(null);
+    if (next !== "random-tests") setActiveRandomTest(null);
+    if (next !== "final-exam") setActiveFinalExam(null);
+    setSidebarOpen(false);
+    setGlobalSearch("");
   }, []);
 
   function refreshProgress() {
@@ -154,6 +225,11 @@ function App() {
   if (!data) {
     return <div className="loading">Avtolearn AI Studio yuklanmoqda...</div>;
   }
+
+  const isExamFocus =
+    (view === "template-tests" && Boolean(activeTemplate)) ||
+    (view === "random-tests" && Boolean(activeRandomTest)) ||
+    (view === "final-exam" && Boolean(activeFinalExam));
 
   const renderView = () => {
     if (view === "home") return <Dashboard data={data} summary={summary} recent={recent} setView={setView} />;
@@ -174,39 +250,63 @@ function App() {
         />
       );
     }
-    if (["random-tests", "all-tests", "saved-tests", "final-exam"].includes(view)) {
+    if (view === "random-tests") {
+      if (!activeRandomTest) {
+        return <RandomTestsPage data={data} summary={summary} onStart={setActiveRandomTest} />;
+      }
+      return (
+        <QuestionStudio
+          mode={view}
+          randomConfig={activeRandomTest}
+          onBack={() => setActiveRandomTest(null)}
+          onProgress={refreshProgress}
+          onAskTutor={(q) => { setQuestionForTutor(q); setTutorOpen(true); }}
+        />
+      );
+    }
+    if (view === "saved-tests") {
+      return <SavedTestsPage onProgress={refreshProgress} onAskTutor={(q) => { setQuestionForTutor(q); setTutorOpen(true); }} />;
+    }
+    if (view === "final-exam") {
+      if (activeFinalExam) {
+        return (
+          <QuestionStudio
+            mode={view}
+            randomConfig={activeFinalExam}
+            onBack={() => setActiveFinalExam(null)}
+            onProgress={refreshProgress}
+            onAskTutor={(q) => { setQuestionForTutor(q); setTutorOpen(true); }}
+          />
+        );
+      }
+      return <FinalExamPage data={data} summary={summary} onStart={setActiveFinalExam} />;
+    }
+    if (["all-tests"].includes(view)) {
       return <QuestionStudio mode={view} onProgress={refreshProgress} onAskTutor={(q) => { setQuestionForTutor(q); setTutorOpen(true); }} />;
     }
     if (view === "autodrome") return <AutodromePage />;
-    if (view === "media") return <MediaLibrary />;
     if (view === "ai") return <AiPanel question={questionForTutor} embedded />;
     return <OperationalPage view={view} data={data} />;
   };
 
   return (
-    <div className="app">
-      <Sidebar
-        view={view}
-        setView={(next) => {
-          setView(next);
-          if (next !== "template-tests") setActiveTemplate(null);
-          setSidebarOpen(false);
-        }}
-        open={sidebarOpen}
-        logo={data.brand.logo}
-      />
+    <div className={`app ${isExamFocus ? "exam-focus-app" : ""}`}>
+      {!isExamFocus && <Sidebar view={view} setView={navigateTo} open={sidebarOpen} />}
       <main className="main">
-        <Topbar
-          search={globalSearch}
-          setSearch={setGlobalSearch}
-          toggleSidebar={() => setSidebarOpen(true)}
-          openTutor={() => setTutorOpen(true)}
-        />
+        {!isExamFocus && (
+          <Topbar
+            search={globalSearch}
+            setSearch={setGlobalSearch}
+            toggleSidebar={() => setSidebarOpen(true)}
+            openTutor={() => setTutorOpen(true)}
+            setView={navigateTo}
+          />
+        )}
         <section className="content">{renderView()}</section>
       </main>
-      <button className="chat-fab" onClick={() => setTutorOpen(true)} aria-label="AI tutor">
+      {!isExamFocus && <button className="chat-fab" onClick={() => setTutorOpen(true)} aria-label="AI tutor">
         <MessageCircle size={22} />
-      </button>
+      </button>}
       {tutorOpen && (
         <div className="drawer">
           <AiPanel question={questionForTutor} onClose={() => setTutorOpen(false)} />
@@ -216,17 +316,23 @@ function App() {
   );
 }
 
+const LOGO_PATH = "/assets/static/Logo AvtoLearn.svg";
+
 function Sidebar({
   view,
   setView,
   open,
-  logo,
 }: {
   view: View;
   setView: (view: View) => void;
   open: boolean;
-  logo: string;
 }) {
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroup = (title: string) => {
+    setCollapsedGroups((groups) => ({ ...groups, [title]: !groups[title] }));
+  };
+
   const navButton = (item: NavItem) => {
     const Icon = item.icon;
     return (
@@ -246,18 +352,23 @@ function Sidebar({
   return (
     <aside className={`sidebar ${open ? "open" : ""}`}>
       <div className="brand">
-        <img src={asset(logo)} alt="" />
+        <img src={LOGO_PATH} alt="AvtoLearn" />
         <div>
-          <strong>Avtolearn</strong>
-          <small>AI Studio</small>
+          <strong>AVTOLEARN</strong>
+          <small>ONLINE TA'LIM</small>
         </div>
       </div>
       {navGroups.map((group) => (
-        <div className="nav-group" key={group.title}>
-          <div className="nav-title">
+        <div className={`nav-group ${collapsedGroups[group.title] ? "collapsed" : ""}`} key={group.title}>
+          <button
+            className="nav-title"
+            type="button"
+            onClick={() => toggleGroup(group.title)}
+            aria-expanded={!collapsedGroups[group.title]}
+          >
             <span>{group.title}</span>
             <ChevronDown size={13} />
-          </div>
+          </button>
           <nav>{group.items.map(navButton)}</nav>
         </div>
       ))}
@@ -270,22 +381,98 @@ function Topbar({
   setSearch,
   toggleSidebar,
   openTutor,
+  setView,
 }: {
   search: string;
   setSearch: (value: string) => void;
   toggleSidebar: () => void;
   openTutor: () => void;
+  setView: (view: View) => void;
 }) {
+  const searchRef = useRef<HTMLDivElement>(null);
+  const [focused, setFocused] = useState(false);
+
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    const matches: { id: string; label: string; group: string; icon: typeof Home }[] = [];
+    for (const group of navGroups) {
+      for (const item of group.items) {
+        if (item.label.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)) {
+          matches.push({ id: item.id, label: item.label, group: group.title, icon: item.icon });
+        }
+      }
+    }
+    return matches;
+  }, [search]);
+
+  const showDropdown = focused && search.trim().length > 0;
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        const input = searchRef.current?.querySelector("input");
+        input?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!showDropdown) return;
+    const onClick = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [showDropdown]);
+
   return (
     <header className="topbar">
       <button className="icon-button mobile-only" onClick={toggleSidebar}>
         <Menu size={20} />
       </button>
-      <label className="search-box global-search">
-        <Search size={18} />
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Savollar, darslar, testlar..." />
-        <kbd>Ctrl K</kbd>
-      </label>
+      <div className="search-wrapper" ref={searchRef}>
+        <label className="search-box global-search">
+          <Search size={16} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => setFocused(true)}
+            placeholder="Qidiruv..."
+          />
+          <kbd>Ctrl K</kbd>
+        </label>
+        {showDropdown && (
+          <div className="search-dropdown">
+            {searchResults.length > 0 ? (
+              searchResults.map((r) => {
+                const Icon = r.icon;
+                return (
+                  <button
+                    key={r.id}
+                    className="search-result-item"
+                    onMouseDown={() => {
+                      setView(r.id as View);
+                      setFocused(false);
+                    }}
+                  >
+                    <span className="search-result-icon"><Icon size={16} /></span>
+                    <span className="search-result-label">{r.label}</span>
+                    <span className="search-result-group">{r.group}</span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="search-no-results">Natija topilmadi</div>
+            )}
+          </div>
+        )}
+      </div>
       <div className="topbar-actions">
         <button className="chip status-chip">Online</button>
         <button className="icon-button" title="Tungi rejim">
@@ -341,17 +528,49 @@ function PageHeader({
 
 function Lessons({ data }: { data: AppData }) {
   const [activeLesson, setActiveLesson] = useState<number | null>(null);
+  const [activeTopic, setActiveTopic] = useState<Topic | null>(null);
+  const [lessonFontSize, setLessonFontSize] = useState(() => {
+    const stored = Number(localStorage.getItem("lessonFontSize"));
+    return Number.isFinite(stored) && stored >= 15 && stored <= 22 ? stored : 17;
+  });
+
+  const hasTopicContent = (topic: Topic) =>
+    topic.questionCount > 0 || Boolean(topic.contents?.some((content) => content.content.trim()));
+
+  const isSinovLabel = (value: string) => {
+    const label = clean(value).toLowerCase().trim();
+    return label.includes("sinov") || label === "test";
+  };
+
+  const shouldShowTopic = (topic: Topic) => hasTopicContent(topic) || !isSinovLabel(topic.title);
+
+  const topicsForLesson = (lessonId: number) =>
+    data.topics.filter((topic) => topic.lessonId === lessonId && shouldShowTopic(topic));
+
+  const visibleLessons = data.lessons.filter((lesson) => {
+    const lessonTopics = topicsForLesson(lesson.id);
+    const isSinovLesson = isSinovLabel(lesson.title) || isSinovLabel(lesson.shortName);
+    return !isSinovLesson || lessonTopics.length > 0;
+  });
 
   const topicCountFor = (lessonId: number) =>
-    data.topics.filter((topic) => topic.lessonId === lessonId).length;
+    topicsForLesson(lessonId).length;
 
   const selectedLesson = activeLesson !== null
     ? data.lessons.find((l) => l.id === activeLesson) ?? null
     : null;
 
   const lessonTopics = selectedLesson
-    ? data.topics.filter((t) => t.lessonId === selectedLesson.id)
+    ? topicsForLesson(selectedLesson.id)
     : [];
+  const activeTopicIndex = activeTopic
+    ? lessonTopics.findIndex((topic) => topic.id === activeTopic.id)
+    : -1;
+  const previousTopic = activeTopicIndex > 0 ? lessonTopics[activeTopicIndex - 1] : null;
+  const nextTopic = activeTopicIndex >= 0 && activeTopicIndex < lessonTopics.length - 1
+    ? lessonTopics[activeTopicIndex + 1]
+    : null;
+  const activeTopicNumber = activeTopicIndex >= 0 ? activeTopicIndex + 1 : 0;
 
   const formatTime = (seconds?: number) => {
     if (!seconds) return "";
@@ -366,6 +585,17 @@ function Lessons({ data }: { data: AppData }) {
     return "Dars";
   };
 
+  const openLesson = (lessonId: number) => {
+    setActiveLesson(lessonId);
+    setActiveTopic(null);
+  };
+
+  const changeLessonFontSize = (next: number) => {
+    const value = Math.min(22, Math.max(15, next));
+    setLessonFontSize(value);
+    localStorage.setItem("lessonFontSize", String(value));
+  };
+
   if (selectedLesson) {
     return (
       <div className="page-shell">
@@ -374,7 +604,7 @@ function Lessons({ data }: { data: AppData }) {
           subtitle={`${selectedLesson.shortName} — ${lessonTopics.length} ta mavzu`}
           eyebrow="Dars tafsilotlari"
           actions={
-            <button className="link-button" onClick={() => setActiveLesson(null)}>
+            <button className="link-button" onClick={() => { setActiveTopic(null); setActiveLesson(null); }}>
               ← Ortga qaytish
             </button>
           }
@@ -385,34 +615,133 @@ function Lessons({ data }: { data: AppData }) {
             <p>Bu dars uchun mavzular hali yuklanmagan.</p>
           </div>
         ) : (
-          <div className="topic-list">
-            {lessonTopics.map((topic, index) => (
-              <article className="topic-card" key={topic.id}>
-                <div className="topic-index">{index + 1}</div>
-                <div className="topic-body">
-                  <h4 className="topic-title">{clean(topic.title)}</h4>
-                  <div className="topic-meta">
-                    <span className={`topic-type-badge type-${topic.type}`}>
-                      {topicTypeLabel(topic.type)}
-                    </span>
-                    {topic.questionCount > 0 && (
-                      <span className="topic-question-count">
-                        {topic.questionCount} ta savol
-                      </span>
-                    )}
-                    {topic.timeLimit ? (
-                      <span className="topic-time-limit">
-                        <Timer size={13} /> {formatTime(topic.timeLimit)}
-                      </span>
-                    ) : null}
+          <section className="lesson-study-layout">
+            <aside className="topic-sidebar card">
+              <div className="topic-sidebar-head">
+                <span>Mavzular</span>
+                <strong>{lessonTopics.length}</strong>
+              </div>
+              <div className="topic-list">
+                {lessonTopics.map((topic, index) => (
+                  <article
+                    className={`topic-card ${activeTopic?.id === topic.id ? "active" : ""}`}
+                    key={topic.id}
+                    onClick={() => setActiveTopic(topic)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setActiveTopic(topic);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="topic-index">{index + 1}</div>
+                    <div className="topic-body">
+                      <h4 className="topic-title">{clean(topic.title)}</h4>
+                      <div className="topic-meta">
+                        <span className={`topic-type-badge type-${topic.type}`}>
+                          {topicTypeLabel(topic.type)}
+                        </span>
+                        {topic.questionCount > 0 && (
+                          <span className="topic-question-count">
+                            {topic.questionCount} ta savol
+                          </span>
+                        )}
+                        {topic.timeLimit ? (
+                          <span className="topic-time-limit">
+                            <Timer size={13} /> {formatTime(topic.timeLimit)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </aside>
+
+            <section className="topic-detail-panel card" style={{ "--lesson-font-size": `${lessonFontSize}px` } as React.CSSProperties}>
+              {activeTopic ? (
+                <div>
+                  <div className="topic-reading-toolbar">
+                    <div>
+                      <div className="topic-reading-meta">
+                        <span className={`topic-type-badge type-${activeTopic.type}`}>
+                          {topicTypeLabel(activeTopic.type)}
+                        </span>
+                        <span>{activeTopicNumber}/{lessonTopics.length} mavzu</span>
+                      </div>
+                      <h2>{clean(activeTopic.title)}</h2>
+                    </div>
+                    <div className="font-size-control" aria-label="Dars matni o'lchami">
+                      <button
+                        disabled={lessonFontSize <= 15}
+                        onClick={() => changeLessonFontSize(lessonFontSize - 1)}
+                        type="button"
+                      >
+                        -
+                      </button>
+                      <span><strong>A</strong> {lessonFontSize}px</span>
+                      <button
+                        disabled={lessonFontSize >= 22}
+                        onClick={() => changeLessonFontSize(lessonFontSize + 1)}
+                        type="button"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="topic-progress-track" aria-label="Mavzu progressi">
+                    <span style={{ width: `${(activeTopicNumber / lessonTopics.length) * 100}%` }} />
+                  </div>
+                  {activeTopic.contents?.length ? (
+                    <div className="topic-content-blocks">
+                      {activeTopic.contents.map((block) => (
+                        <div className="topic-content-block" key={block.id}>
+                          {isImageContent(block.content) ? (
+                            <img src={backendAsset(block.content)} alt={clean(activeTopic.title)} loading="lazy" />
+                          ) : (
+                            <div
+                              className="topic-html-content"
+                              dangerouslySetInnerHTML={{ __html: sanitizeTopicHtml(block.content) }}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Ushbu mavzu lokal o'quv bazasidan yuklangan, lekin matnli kontent hali saqlanmagan.</p>
+                  )}
+                  <div className="topic-navigation-footer">
+                    <button
+                      className="topic-nav-button"
+                      disabled={!previousTopic}
+                      onClick={() => previousTopic && setActiveTopic(previousTopic)}
+                      type="button"
+                    >
+                      <ArrowLeft size={16} />
+                      <span>Oldingi mavzu</span>
+                    </button>
+                    <button
+                      className="topic-nav-button primary"
+                      disabled={!nextTopic}
+                      onClick={() => nextTopic && setActiveTopic(nextTopic)}
+                      type="button"
+                    >
+                      <span>Keyingi mavzu</span>
+                      <ArrowRight size={16} />
+                    </button>
                   </div>
                 </div>
-                <div className="topic-status">
-                  <span className="topic-status-dot pending"></span>
+              ) : (
+                <div className="topic-empty-detail">
+                  <BookOpen size={34} />
+                  <h2>Mavzuni tanlang</h2>
+                  <p>Chap tarafdagi ro'yxatdan mavzu tanlang, kontent shu yerda ochiladi.</p>
                 </div>
-              </article>
-            ))}
-          </div>
+              )}
+            </section>
+          </section>
         )}
       </div>
     );
@@ -422,14 +751,26 @@ function Lessons({ data }: { data: AppData }) {
     <div className="page-shell">
       <PageHeader title="Darslar" subtitle="Nazariy modullar, mavzular va lokal o'quv materiallari." />
       <div className="section-grid">
-        {data.lessons.map((lesson) => {
+        {visibleLessons.map((lesson) => {
           const lessonTopicCount = lesson.topicCount ?? topicCountFor(lesson.id);
           return (
-            <article className="card lesson-card" key={lesson.id}>
+            <article
+              className="card lesson-card clickable"
+              key={lesson.id}
+              onClick={() => openLesson(lesson.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openLesson(lesson.id);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
               <span>{lesson.shortName}</span>
               <h3>{clean(lesson.title)}</h3>
               <p>{lessonTopicCount} ta mavzu va lokal materiallar</p>
-              <button className="link-button" onClick={() => setActiveLesson(lesson.id)}>
+              <button className="link-button" onClick={(event) => { event.stopPropagation(); openLesson(lesson.id); }}>
                 Boshlash <ArrowRight size={16} />
               </button>
             </article>
@@ -457,17 +798,84 @@ function roadSignDescription(sign: RoadSignItem, typeTitle: string) {
   return `${clean(typeTitle)} bo'limidagi ushbu belgi haydovchini yo'l sharoiti haqida oldindan xabardor qiladi. Belgini ko'rgan haydovchi tezlikni, masofani va harakat yo'nalishini vaziyatga mos tanlashi kerak.`;
 }
 
+const svetoforInfo = {
+  transport: {
+    title: "Transport svetaforlari",
+    summary:
+      "Transport svetoforlari chorrahalar, piyodalar o'tish joylari va tartibga solinadigan yo'l qismlarida transport vositalari harakatini boshqaradi.",
+    points: [
+      "Yashil chiroq harakatlanishga ruxsat beradi, lekin haydovchi chorrahadagi piyoda va boshqa transport vositalari xavfsizligini tekshirishi shart.",
+      "Sariq chiroq odatda harakatni taqiqlaydi va signal almashayotganini bildiradi. To'xtash xavfli bo'lgan holatlar bundan mustasno.",
+      "Qizil chiroq harakatlanishni taqiqlaydi. Haydovchi stop-chiziq, 5.33 belgisi yoki qatnov qismi chetida to'xtashi kerak.",
+      "Qo'shimcha seksiyadagi yashil strelka faqat ko'rsatilgan yo'nalishda harakatlanishga ruxsat beradi va ustuvor yo'ldagi qatnashchilarga yo'l berish talab qilinadi.",
+    ],
+  },
+  pedestrian: {
+    title: "Piyodalar svetaforlari",
+    summary:
+      "Piyodalar svetoforlari piyodalar o'tish joylarida odamlarning yo'lni xavfsiz kesib o'tishini tartibga soladi.",
+    points: [
+      "Yashil piyoda belgisi yo'lni kesib o'tishga ruxsat beradi. Piyoda baribir yaqinlashayotgan transportni kuzatishi kerak.",
+      "Qizil piyoda belgisi o'tishni taqiqlaydi. Piyodalar yo'l chetida yoki xavfsizlik orolchasida kutishi kerak.",
+      "Miltillovchi yashil signal ruxsat vaqti tugayotganini bildiradi; o'tishni boshlamagan piyoda kutishi maqsadga muvofiq.",
+      "Piyoda yo'lni kesib o'tayotganida haydovchilar burilishda ham piyodalarga yo'l berishi shart.",
+    ],
+  },
+};
+
+function SvetoforInfoPanel({ typeId }: { typeId: number }) {
+  const info = typeId === 8 ? svetoforInfo.transport : typeId === 9 ? svetoforInfo.pedestrian : null;
+  if (!info) return null;
+
+  return (
+    <section className="svetofor-info-grid">
+      <article className="svetofor-info-main card">
+        <span>O'quv ma'lumot</span>
+        <h3>{info.title}</h3>
+        <p>{info.summary}</p>
+      </article>
+      {info.points.map((point, index) => (
+        <article className="svetofor-rule-card card" key={point}>
+          <strong>{index + 1}</strong>
+          <p>{point}</p>
+        </article>
+      ))}
+    </section>
+  );
+}
+
 function RoadSigns({ data }: { data: AppData }) {
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
   const [selectedSign, setSelectedSign] = useState<RoadSignItem | null>(null);
   const [selectedPreviewIndex, setSelectedPreviewIndex] = useState(0);
   const [page, setPage] = useState(1);
+  const roadSignModalBodyRef = useRef<HTMLDivElement | null>(null);
+  const sortedTypes = useMemo(
+    () => data.signs.slice().sort((a, b) => a.id - b.id || compareCode(a.code, b.code)),
+    [data.signs],
+  );
   const selectedType = selectedTypeId ? data.signs.find((sign) => sign.id === selectedTypeId) : null;
-  const selectedSigns = selectedTypeId ? data.roadSigns.filter((sign) => sign.typeId === selectedTypeId) : [];
+  const selectedSigns = useMemo(
+    () =>
+      selectedTypeId
+        ? data.roadSigns
+            .filter((sign) => sign.typeId === selectedTypeId)
+            .slice()
+            .sort((a, b) => compareCode(effectiveSignCode(a), effectiveSignCode(b)) || a.id - b.id)
+        : [],
+    [data.roadSigns, selectedTypeId],
+  );
   const pageSize = 12;
   const totalPages = Math.max(1, Math.ceil(selectedSigns.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const visibleSigns = selectedSigns.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const selectedSignIndex = selectedSign
+    ? selectedSigns.findIndex((sign) => sign.id === selectedSign.id)
+    : -1;
+  const previousSign = selectedSignIndex > 0 ? selectedSigns[selectedSignIndex - 1] : null;
+  const nextSign = selectedSignIndex >= 0 && selectedSignIndex < selectedSigns.length - 1
+    ? selectedSigns[selectedSignIndex + 1]
+    : null;
   const openType = (id: number) => {
     setSelectedTypeId(id);
     setPage(1);
@@ -475,6 +883,14 @@ function RoadSigns({ data }: { data: AppData }) {
   const openSign = (sign: RoadSignItem) => {
     setSelectedSign(sign);
     setSelectedPreviewIndex(0);
+    window.requestAnimationFrame(() => {
+      roadSignModalBodyRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    });
+  };
+  const startSignStudy = () => {
+    setPage(1);
+    const firstSign = selectedSigns[0];
+    if (firstSign) openSign(firstSign);
   };
 
   useEffect(() => {
@@ -495,11 +911,15 @@ function RoadSigns({ data }: { data: AppData }) {
           </button>
           <div>
             <h2>{clean(selectedType.title).toUpperCase()}</h2>
-            <p>{selectedSigns.length || selectedType.count} ta belgi</p>
+            <p>{selectedSigns.length || selectedType.count} ta belgi • {currentPage}/{totalPages} sahifa</p>
           </div>
+          <button className="primary-button road-sign-study-button" onClick={startSignStudy}>
+            O'rganishni boshlash
+          </button>
         </section>
 
         <section className="road-sign-detail-card card">
+          <SvetoforInfoPanel typeId={selectedType.id} />
           {visibleSigns.length ? (
             <div className="road-sign-detail-grid">
               {visibleSigns.map((sign) => (
@@ -508,7 +928,7 @@ function RoadSigns({ data }: { data: AppData }) {
                     <img src={asset(sign.image)} alt={clean(sign.title)} />
                   </div>
                   <h3>
-                    {sign.code}. {clean(sign.title)}
+                    {displaySignCode(sign)}. {clean(sign.title)}
                   </h3>
                   <button onClick={() => openSign(sign)}>To'liq ko'rish</button>
                 </article>
@@ -546,7 +966,7 @@ function RoadSigns({ data }: { data: AppData }) {
         </section>
 
         {selectedSign && (() => {
-          const previewImages = selectedSign.previewImages?.length ? selectedSign.previewImages : [selectedSign.image];
+          const previewImages = uniquePreviewImages(selectedSign);
           const activePreview = previewImages[Math.min(selectedPreviewIndex, previewImages.length - 1)] ?? selectedSign.image;
           return (
             <div className="road-sign-modal-backdrop" onClick={() => setSelectedSign(null)} role="presentation">
@@ -559,13 +979,13 @@ function RoadSigns({ data }: { data: AppData }) {
               >
                 <header className="road-sign-modal-header">
                   <h2 id="road-sign-modal-title">
-                    {selectedSign.code}. {clean(selectedSign.title)}
+                    {displaySignCode(selectedSign)}. {clean(selectedSign.title)}
                   </h2>
                   <button className="road-sign-modal-close" onClick={() => setSelectedSign(null)} aria-label="Yopish">
                     <X size={22} />
                   </button>
                 </header>
-                <div className="road-sign-modal-body">
+                <div className="road-sign-modal-body" ref={roadSignModalBodyRef}>
                   <div className="road-sign-modal-preview">
                     <img src={asset(activePreview)} alt={clean(selectedSign.title)} />
                   </div>
@@ -585,7 +1005,7 @@ function RoadSigns({ data }: { data: AppData }) {
                   )}
                   <div className="road-sign-modal-content">
                     <h3>
-                      {selectedSign.code}. "{clean(selectedSign.title)}"
+                      {displaySignCode(selectedSign)}. "{clean(selectedSign.title)}"
                     </h3>
                     <p>{roadSignDescription(selectedSign, selectedType.title)}</p>
                   </div>
@@ -605,6 +1025,34 @@ function RoadSigns({ data }: { data: AppData }) {
                       )}
                     </div>
                   )}
+                  <div className="road-sign-modal-actions">
+                    <button
+                      className="road-sign-modal-nav"
+                      disabled={!previousSign}
+                      onClick={() => previousSign && openSign(previousSign)}
+                      type="button"
+                    >
+                      <ArrowLeft size={16} /> Oldingi belgi
+                    </button>
+                    <button
+                      className="road-sign-test-cta"
+                      onClick={() => {
+                        setSelectedSign(null);
+                        setSelectedTypeId(null);
+                      }}
+                      type="button"
+                    >
+                      Barcha belgilar
+                    </button>
+                    <button
+                      className="road-sign-modal-nav primary"
+                      disabled={!nextSign}
+                      onClick={() => nextSign && openSign(nextSign)}
+                      type="button"
+                    >
+                      Keyingi belgi <ArrowRight size={16} />
+                    </button>
+                  </div>
                 </div>
               </section>
             </div>
@@ -618,7 +1066,7 @@ function RoadSigns({ data }: { data: AppData }) {
     <div className="page-shell">
       <PageHeader title="Yo'l belgilari" subtitle="Belgilar katalogi va imtihonlarda uchraydigan vizual holatlar." />
       <div className="section-grid">
-        {data.signs.map((sign) => (
+        {sortedTypes.map((sign) => (
           <article
             className="card sign-card clickable"
             key={sign.id}
@@ -629,9 +1077,11 @@ function RoadSigns({ data }: { data: AppData }) {
             role="button"
             tabIndex={0}
           >
-            <img src={asset(sign.image)} alt="" />
+            <div className="sign-card-image">
+              <img src={asset(sign.image)} alt="" />
+            </div>
             <h3>{clean(sign.title)}</h3>
-            <p>{sign.count} ta belgi</p>
+            <p><span>{sign.count}</span> ta belgi</p>
           </article>
         ))}
       </div>
@@ -639,153 +1089,566 @@ function RoadSigns({ data }: { data: AppData }) {
   );
 }
 
-type PenaltySection = "fines" | "points";
+type PenaltySection = "landing" | "fines" | "points";
+type PenaltyCategory = "all" | "speed" | "safety" | "actions" | "docs" | "heavy";
+
+function getPenaltyPoints(penalty: Penalty): number {
+  const art = (penalty.article || "").toLowerCase().trim();
+  if (art.includes("125-modda, 1-qism")) return 1;
+  if (art.includes("128-modda")) return 1;
+  if (art.includes("128-1 -modda, 1-qism") || art.includes("128-1-modda, 1-qism") || art.includes("128-1")) return 3;
+  if (art.includes("128-3 -modda, 1-qism") || art.includes("128-3-modda, 1-qism")) return 1;
+  if (art.includes("128-3 -modda, 2-qism") || art.includes("128-3-modda, 2-qism")) return 3;
+  if (art.includes("128-3 -modda, 3-qism") || art.includes("128-3-modda, 3-qism")) return 6;
+  if (art.includes("128-3 -modda, 4-qism") || art.includes("128-3-modda, 4-qism")) return 6;
+  if (art.includes("128-4 -modda, 1-qism") || art.includes("128-4-modda, 1-qism")) return 1;
+  if (art.includes("128-4 -modda, 2-qism") || art.includes("128-4-modda, 2-qism")) return 3;
+  if (art.includes("128-5 -modda, 1-qism") || art.includes("128-5-modda, 1-qism")) return 3;
+  if (art.includes("128-5 -modda, 2-qism") || art.includes("128-5-modda, 2-qism")) return 4;
+  if (art.includes("128-6")) return 1;
+  if (art.includes("128-8 -modda, 1-qism")) return 1;
+  if (art.includes("128-8 -modda, 2-qism")) return 3;
+  if (art.includes("128-9")) return 2;
+  if (art.includes("129")) return 3;
+  if (art.includes("130")) return 4;
+  if (art.includes("135-modda, 1-qism")) return 1;
+  if (art.includes("135-modda, 2-qism")) return 3;
+
+  // fallback to db value
+  const pVal = parseFloat((penalty.points || "").replace(",", "."));
+  return isNaN(pVal) ? 0 : pVal;
+}
+
+const categorizePenalty = (penalty: Penalty): PenaltyCategory[] => {
+  const categories: PenaltyCategory[] = ["all"];
+  const title = (penalty.title || "").toLowerCase();
+  const desc = (penalty.description || "").toLowerCase();
+  const art = (penalty.article || "").toLowerCase();
+  
+  // Tezlik
+  if (title.includes("tezlik") || desc.includes("tezlik") || art.includes("128-3")) {
+    categories.push("speed");
+  }
+  
+  // Xavfsizlik
+  if (
+    title.includes("kamar") || desc.includes("kamar") ||
+    title.includes("shlem") || desc.includes("shlem") ||
+    title.includes("tormoz") || desc.includes("tormoz") ||
+    title.includes("rul") || desc.includes("rul") ||
+    title.includes("nosozlik") || desc.includes("nosozlik") ||
+    title.includes("tibbiy") || desc.includes("tibbiy") ||
+    title.includes("aptechka") || desc.includes("aptechka") ||
+    title.includes("jilet") || desc.includes("jilet") ||
+    title.includes("oyna") || desc.includes("oyna") ||
+    title.includes("tonlash") || desc.includes("tonlash") ||
+    title.includes("tonirovka") || desc.includes("tonirovka") ||
+    title.includes("qoplamalar") || desc.includes("qoplamalar")
+  ) {
+    categories.push("safety");
+  }
+  
+  // Harakatlar
+  if (
+    title.includes("svetofor") || desc.includes("svetofor") ||
+    title.includes("qizil") || desc.includes("qizil") ||
+    title.includes("chiziq") || desc.includes("chiziq") ||
+    title.includes("qarshi") || desc.includes("qarshi") ||
+    title.includes("quvib") || desc.includes("quvib") ||
+    title.includes("shatak") || desc.includes("shatak") ||
+    title.includes("yo'nalishli") || desc.includes("yo'nalishli") ||
+    title.includes("tasmasi") || desc.includes("tasmasi") ||
+    title.includes("temir yo'l") || desc.includes("temir yo'l") ||
+    title.includes("guruh") || desc.includes("guruh") ||
+    title.includes("to'xtash") || desc.includes("to'xtash") ||
+    title.includes("piyoda") || desc.includes("piyoda") ||
+    title.includes("loy sachratish") || desc.includes("loy sachratish") ||
+    title.includes("tashish") || desc.includes("tashish")
+  ) {
+    categories.push("actions");
+  }
+  
+  // Hujjatlar
+  if (
+    title.includes("hujjat") || desc.includes("hujjat") ||
+    title.includes("guvohnoma") || desc.includes("guvohnoma") ||
+    title.includes("sug'urta") || desc.includes("sug'urta") ||
+    title.includes("polis") || desc.includes("polis") ||
+    title.includes("ishonchnoma") || desc.includes("ishonchnoma") ||
+    title.includes("pasport") || desc.includes("pasport")
+  ) {
+    categories.push("docs");
+  }
+  
+  // Og'ir
+  const bcvVal = parseFloat((penalty.bcv || "").replace(",", "."));
+  if (
+    bcvVal >= 10 ||
+    title.includes("mast") || desc.includes("mast") ||
+    title.includes("giyohvand") || desc.includes("giyohvand") ||
+    title.includes("huquqdan mahrum") || desc.includes("huquqdan mahrum") ||
+    title.includes("soxta") || desc.includes("soxta") ||
+    title.includes("radar") || desc.includes("radar")
+  ) {
+    categories.push("heavy");
+  }
+  
+  return categories;
+};
+
+function formatBcv(bcvStr: string) {
+  if (!bcvStr) return "-";
+  return `${bcvStr} x BHM`;
+}
+
+function calculateAmount(bcvStr: string) {
+  const BHM = 375000;
+  if (!bcvStr) return "-";
+  
+  const rangeMatch = bcvStr.replace(/\s+/g, "").match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
+  if (rangeMatch) {
+    const min = parseFloat(rangeMatch[1]) * BHM;
+    const max = parseFloat(rangeMatch[2]) * BHM;
+    return `${min.toLocaleString("uz-UZ")} - ${max.toLocaleString("uz-UZ")} UZS`;
+  }
+  
+  const val = parseFloat(bcvStr.replace(",", "."));
+  if (!isNaN(val)) {
+    return `${(val * BHM).toLocaleString("uz-UZ")} UZS`;
+  }
+  return bcvStr;
+}
 
 function PenaltiesPage({ data }: { data: AppData }) {
-  const [section, setSection] = useState<PenaltySection>("fines");
+  const [mode, setMode] = useState<PenaltySection>("landing");
   const [query, setQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<PenaltyCategory>("all");
+  const [simulatedFines, setSimulatedFines] = useState<Penalty[]>([]);
+  const [selectedPenalty, setSelectedPenalty] = useState<Penalty | null>(null);
+
   const penalties = data.penalties || [];
-  const pointPenalties = penalties.filter((penalty) => penalty.points);
-  const maxPointPenalty = pointPenalties.reduce((best, penalty) => {
-    const value = Number(String(penalty.points).replace(",", ".").match(/\d+(\.\d+)?/)?.[0] || 0);
-    return value > best ? value : best;
-  }, 0);
-  const filteredPenalties = penalties.filter((penalty) => {
-    const haystack = `${penalty.title} ${penalty.description} ${penalty.article} ${penalty.amount}`.toLowerCase();
-    return haystack.includes(query.trim().toLowerCase());
+
+  const handleAddSimulated = (penalty: Penalty) => {
+    setSimulatedFines((prev) => [...prev, penalty]);
+  };
+
+  const handleRemoveSimulated = (indexToRemove: number) => {
+    setSimulatedFines((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const simulatedPoints = simulatedFines.reduce(
+    (total, penalty) => total + getPenaltyPoints(penalty),
+    0
+  );
+
+  const categoriesList = [
+    { id: "all", label: "BARCHASI" },
+    { id: "speed", label: "TEZLIK" },
+    { id: "safety", label: "XAVFSIZLIK" },
+    { id: "actions", label: "HARAKATLAR" },
+    { id: "docs", label: "HUJJATLAR" },
+    { id: "heavy", label: "OG'IR" },
+  ] as const;
+
+  const displayPenalties = penalties.filter((penalty) => {
+    const categories = categorizePenalty(penalty);
+    const matchesCat = categories.includes(selectedCategory);
+    const text = `${penalty.title} ${penalty.description} ${penalty.article}`.toLowerCase();
+    const matchesSearch = text.includes(query.toLowerCase().trim());
+    return matchesCat && matchesSearch;
   });
 
-  const compactDescription = (penalty: Penalty) =>
-    penalty.description.length > 180 ? `${penalty.description.slice(0, 180).trim()}...` : penalty.description;
+  const handleModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value as PenaltySection;
+    setMode(val);
+    setQuery("");
+    setSelectedPenalty(null);
+  };
+
+  useEffect(() => {
+    if (!selectedPenalty) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedPenalty(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedPenalty]);
+
+  // 1. Landing View
+  if (mode === "landing") {
+    return (
+      <div className="penalties-page page-shell">
+        <div className="penalty-main-header">
+          <h1>YO'L HARAKATI QOIDALARINI BUZGANLIK UCHUN JARIMALAR</h1>
+          <p>O'ZBEKISTON RESPUBLIKASI MA'MURIY JAVOBGARLIK TO'G'RISIDAGI KODEKS DARSLIGI</p>
+        </div>
+
+        <div className="penalty-alert-card">
+          <div className="penalty-alert-icon">
+            <ShieldAlert size={24} />
+          </div>
+          <div className="penalty-alert-content">
+            <h3>HAYDOVCHI BALLAR TIZIMI ESLATMASI</h3>
+            <p>
+              O'zbekistonda eng so'nggi ma'muriy kodeksga muvofiq jami qoidabuzarliklarning davlat balli 12 ballik limitsiz ko'rsatkich deb olingan.
+              Ushbu kurs doirasida siz nazariya biletlarini o'rganishda jarimalarni yod olishingiz kerak bo'ladi,
+              chunki davlat imtihonida bunga oid 1-2 ta savol har gal tushadi!
+            </p>
+          </div>
+        </div>
+
+        <div className="penalty-options-grid">
+          <div className="penalty-option-card">
+            <div className="penalty-option-icon-wrapper blue">
+              <ShieldAlert size={28} />
+            </div>
+            <h2>UMUMIY JARIMALAR</h2>
+            <p>
+              Eng faol yo'l qoidalari buzilishlari, teleradarlar, rasm-ko'rik ko'rsatkichlari, tonirovka, BHM hisobi va ma'muriy jarimalar katalogi darsligi.
+            </p>
+            <button className="penalty-option-button" onClick={() => setMode("fines")}>
+              KIRITISH / KO'RISH →
+            </button>
+          </div>
+
+          <div className="penalty-option-card">
+            <div className="penalty-option-icon-wrapper blue">
+              <Scale size={28} />
+            </div>
+            <h2>JARIMA BALLARI</h2>
+            <p>
+              12-ballik tizim bo'yicha ruxsat etilgan limit ko'rsatkichlari, litsenziyani to'xtatish mezonlari va qoidabuzarlik buni qanday o'zgartirishi tahlilnomasi.
+            </p>
+            <button className="penalty-option-button" onClick={() => setMode("points")}>
+              SIMULYATOR VA MA'LUMOT →
+            </button>
+          </div>
+        </div>
+
+        <div className="penalty-bhm-section">
+          <h3>JORIY BHM HISOBLASH STANDARTI (UZBEKISTAN)</h3>
+          <div className="penalty-bhm-grid">
+            <div className="penalty-bhm-card">
+              <span className="bhm-card-label">BHM (1 BAROBARI)</span>
+              <strong className="bhm-card-value">375 000 UZS</strong>
+            </div>
+            <div className="penalty-bhm-card">
+              <span className="bhm-card-label">O'Z VAQTIDA TO'LOV CHEGIRMASI</span>
+              <strong className="bhm-card-value negative">-50%</strong>
+              <span className="bhm-card-desc">15 kun ichida kvitansiya</span>
+            </div>
+            <div className="penalty-bhm-card">
+              <span className="bhm-card-label">REYTING BALLAR TIZIMI HOLATI</span>
+              <strong className="bhm-card-value active">Aktiv</strong>
+              <span className="bhm-card-desc">Litsenziya 12-ballik limitda</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Fines Directory View (Umumiy jarimalar)
+  if (mode === "fines") {
+    return (
+      <div className="penalties-page page-shell">
+        <div className="penalty-sub-header">
+          <div className="penalty-sub-title-wrap">
+            <button className="penalty-back-btn" onClick={() => setMode("landing")} aria-label="Ortga">
+              <ArrowLeft size={18} />
+            </button>
+            <div className="penalty-title-meta">
+              <h1>JARIMALAR (UMUMIY JARIMALAR)</h1>
+              <p>O'ZBEKISTON RESPUBLIKASI MA'MURIY JAVOBGARLIK TO'G'RISIDAGI KODEKS DARSLIGI</p>
+            </div>
+          </div>
+          <div className="penalty-mode-selector">
+            <span>REJIM:</span>
+            <select value={mode} onChange={handleModeChange}>
+              <option value="fines">Umumiy jarimalar</option>
+              <option value="points">Jarima ballari</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="penalty-search-filter-card">
+          <div className="penalty-search-box">
+            <Search size={17} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Jarima turi, moddani qidirish..."
+            />
+          </div>
+          <div className="penalty-categories">
+            {categoriesList.map((cat) => (
+              <button
+                key={cat.id}
+                className={`penalty-category-pill ${selectedCategory === cat.id ? "active" : ""}`}
+                onClick={() => setSelectedCategory(cat.id)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="penalty-card-grid">
+          {displayPenalties.map((penalty) => {
+            const points = getPenaltyPoints(penalty);
+            const pointsText = points > 0 ? `+${points} BALL` : null;
+            const isHeavy = categorizePenalty(penalty).includes("heavy");
+            const isRedBadge = isHeavy || points >= 3;
+
+            return (
+              <article
+                className="penalty-detail-card clickable"
+                key={penalty.id}
+                onClick={() => setSelectedPenalty(penalty)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedPenalty(penalty);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="penalty-detail-card-header">
+                  <span className="penalty-article-badge" title={penalty.article}>
+                    MJTK {penalty.article.toUpperCase()}
+                  </span>
+                  {pointsText && (
+                    <span className={`penalty-point-badge ${isRedBadge ? "red" : ""}`}>
+                      {pointsText}
+                    </span>
+                  )}
+                </div>
+                <h3 className="penalty-detail-title">{clean(penalty.title)}</h3>
+                <p className="penalty-detail-desc">{clean(penalty.description)}</p>
+                <div className="penalty-detail-footer">
+                  <div className="penalty-footer-left">
+                    <span className="penalty-footer-label">JARIMA SUMMASI</span>
+                    <span className="penalty-footer-value">{formatBcv(penalty.bcv)}</span>
+                  </div>
+                  <div className="penalty-footer-right">
+                    <strong className="penalty-amount-uzs">{calculateAmount(penalty.bcv)}</strong>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        {selectedPenalty && (() => {
+          const points = getPenaltyPoints(selectedPenalty);
+          const pointsText = points > 0 ? `+${points} BALL` : "Ball belgilanmagan";
+          return (
+            <div className="penalty-modal-backdrop" onClick={() => setSelectedPenalty(null)} role="presentation">
+              <section
+                aria-labelledby="penalty-modal-title"
+                aria-modal="true"
+                className="penalty-modal"
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+              >
+                <header className="penalty-modal-header">
+                  <div>
+                    <span className="penalty-article-badge">MJTK {selectedPenalty.article.toUpperCase()}</span>
+                    <h2 id="penalty-modal-title">{clean(selectedPenalty.title)}</h2>
+                  </div>
+                  <button className="penalty-modal-close" onClick={() => setSelectedPenalty(null)} aria-label="Yopish">
+                    <X size={20} />
+                  </button>
+                </header>
+                <div className="penalty-modal-body">
+                  <p>{clean(selectedPenalty.description)}</p>
+                  <div className="penalty-modal-facts">
+                    <div>
+                      <span>Jarima summasi</span>
+                      <strong>{formatBcv(selectedPenalty.bcv)}</strong>
+                    </div>
+                    <div>
+                      <span>UZS hisobida</span>
+                      <strong>{calculateAmount(selectedPenalty.bcv)}</strong>
+                    </div>
+                    <div>
+                      <span>Jarima balli</span>
+                      <strong>{pointsText}</strong>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  }
+
+  // 3. Points Simulator View (Jarima ballari)
+  const maxPoints = 12;
+  const strokeWidth = 8;
+  const radius = 56;
+  const circumference = 2 * Math.PI * radius;
+  const progress = Math.min(simulatedPoints, maxPoints);
+  const strokeDashoffset = circumference - (progress / maxPoints) * circumference;
+
+  let statusText = "O'TA XAVFSIZ";
+  let statusColor = "#12a877"; // emerald
+  if (simulatedPoints > 0 && simulatedPoints <= 4) {
+    statusText = "YAXSHI";
+    statusColor = "#12a877";
+  } else if (simulatedPoints >= 5 && simulatedPoints <= 8) {
+    statusText = "DIQQAT";
+    statusColor = "#d9a441"; // amber
+  } else if (simulatedPoints >= 9 && simulatedPoints <= 11) {
+    statusText = "XAVFLI";
+    statusColor = "#f0526f"; // rose
+  } else if (simulatedPoints >= 12) {
+    statusText = "MAHRUM QILINISH";
+    statusColor = "#b91c1c"; // dark red
+  }
 
   return (
     <div className="penalties-page page-shell">
-      <PageHeader
-        eyebrow="YHQ javobgarligi"
-        title="Jarimalar"
-        subtitle="Yo'l harakati qoidabuzarliklari, jarima miqdorlari va jarima ballari bo'yicha o'quv ma'lumotlari."
-      />
-
-      <section className="penalty-section-picker card">
-        <button className={section === "fines" ? "active" : ""} onClick={() => setSection("fines")}>
-          <ShieldAlert size={22} />
-          <span>
-            <strong>Umumiy jarimalar</strong>
-            <small>{penalties.length} ta qoidabuzarlik</small>
-          </span>
-        </button>
-        <button className={section === "points" ? "active" : ""} onClick={() => setSection("points")}>
-          <Scale size={22} />
-          <span>
-            <strong>Jarima ballari</strong>
-            <small>{pointPenalties.length} ta balli qoidabuzarlik</small>
-          </span>
-        </button>
-      </section>
-
-      {section === "fines" ? (
-        <section className="penalty-panel card">
-          <div className="penalty-toolbar">
-            <div>
-              <h2>Jarimalar ro'yxati</h2>
-              <p>{data.penaltyInfo?.updatedLabel || "Ma'lumot lokal bazadan olindi."}</p>
-            </div>
-            <label className="search-box penalty-search">
-              <Search size={17} />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Jarima yoki modda bo'yicha qidirish" />
-            </label>
+      <div className="penalty-sub-header">
+        <div className="penalty-sub-title-wrap">
+          <button className="penalty-back-btn" onClick={() => setMode("landing")} aria-label="Ortga">
+            <ArrowLeft size={18} />
+          </button>
+          <div className="penalty-title-meta">
+            <h1>JARIMALAR (JARIMA BALLARI)</h1>
+            <p>O'ZBEKISTON RESPUBLIKASI MA'MURIY JAVOBGARLIK TO'G'RISIDAGI KODEKS DARSLIGI</p>
           </div>
+        </div>
+        <div className="penalty-mode-selector">
+          <span>REJIM:</span>
+          <select value={mode} onChange={handleModeChange}>
+            <option value="fines">Umumiy jarimalar</option>
+            <option value="points">Jarima ballari</option>
+          </select>
+        </div>
+      </div>
 
-          <div className="penalty-summary-grid">
-            <article>
-              <span>Manba</span>
-              <strong>{data.penaltyInfo?.bcvLabel || "BHM asosida"}</strong>
-            </article>
-            <article>
-              <span>Jarima balli bor</span>
-              <strong>{pointPenalties.length}</strong>
-            </article>
-            <article>
-              <span>Eng yuqori ball</span>
-              <strong>{maxPointPenalty}</strong>
-            </article>
-          </div>
+      <div className="penalty-points-layout">
+        <div className="penalty-simulator-left">
+          <h2>SIZNING IMTIHON LIMIT HOLATINGIZ</h2>
 
-          <div className="penalty-card-grid">
-            {filteredPenalties.map((penalty) => (
-              <article className="penalty-card" key={penalty.id}>
-                <div className="penalty-card-head">
-                  <h3>{penalty.title}</h3>
-                  {penalty.points && <span>{penalty.points} ball</span>}
-                </div>
-                <p>{compactDescription(penalty)}</p>
-                <dl>
-                  <div>
-                    <dt>Modda</dt>
-                    <dd>{penalty.article}</dd>
-                  </div>
-                  <div>
-                    <dt>Jarima</dt>
-                    <dd>{penalty.amount}</dd>
-                  </div>
-                  <div>
-                    <dt>BHM</dt>
-                    <dd>{penalty.bcv || "-"}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : (
-        <section className="penalty-panel card">
-          <div className="penalty-points-layout">
-            <article className="penalty-points-main">
-              <span>12 ballik tizim</span>
-              <h2>Jarima ballari qanday ishlaydi?</h2>
-              <p>{data.penaltyInfo?.pointsSummary}</p>
-              <div className="penalty-point-meter">
-                <strong>12</strong>
-                <span>oylik limit</span>
-              </div>
-            </article>
-            <div className="penalty-rules-list">
-              {(data.penaltyInfo?.pointsRules || []).map((rule, index) => (
-                <div key={rule}>
-                  <span>{index + 1}</span>
-                  <p>{rule}</p>
-                </div>
-              ))}
+          <div className="penalty-sim-meter-box">
+            <svg className="penalty-sim-svg" viewBox="0 0 140 140" width="140" height="140">
+              <circle
+                cx="70"
+                cy="70"
+                r={radius}
+                fill="transparent"
+                stroke="#e6edf5"
+                strokeWidth={strokeWidth}
+              />
+              <circle
+                cx="70"
+                cy="70"
+                r={radius}
+                fill="transparent"
+                stroke={statusColor}
+                strokeWidth={strokeWidth}
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                transform="rotate(-90 70 70)"
+                style={{ transition: "stroke-dashoffset 0.3s ease, stroke 0.3s ease" }}
+              />
+            </svg>
+            <div className="penalty-sim-meter-text">
+              <strong className="sim-meter-score">{simulatedPoints}</strong>
+              <span className="sim-meter-total">/ {maxPoints} BALL</span>
             </div>
           </div>
 
-          <div className="penalty-table-wrap">
-            <table className="penalty-table">
-              <thead>
-                <tr>
-                  <th>Qoidabuzarlik</th>
-                  <th>Modda</th>
-                  <th>Jarima</th>
-                  <th>Ball</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pointPenalties.map((penalty) => (
-                  <tr key={penalty.id}>
-                    <td>
-                      <strong>{penalty.title}</strong>
-                      <span>{compactDescription(penalty)}</span>
-                    </td>
-                    <td>{penalty.article}</td>
-                    <td>{penalty.amount}</td>
-                    <td><strong>{penalty.points}</strong></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="penalty-sim-status-label" style={{ color: statusColor }}>
+            {statusText} • {simulatedPoints} BALL
           </div>
-        </section>
-      )}
+
+          <p className="penalty-sim-desc">
+            Quyidagi o'ng bo'limda joylashgan har qaysi qoidabuzarliklarni qo'shib joriy ballingiz nimalarga va qanday to'lovlarga qodirligini sinab ko'rishingiz mumkin.
+          </p>
+
+          <div className="penalty-sim-history-card">
+            <h3>TARIXIY JARIMALAR ({simulatedFines.length})</h3>
+            <div className="simulated-list">
+              {simulatedFines.length === 0 ? (
+                <div className="simulated-list-empty">Simulyatsiyada hech qanday qarzlar yo'q</div>
+              ) : (
+                simulatedFines.map((item, index) => (
+                  <div className="simulated-list-item" key={`${item.id}-${index}`}>
+                    <div className="simulated-item-info">
+                      <strong>{clean(item.title)}</strong>
+                      <span>
+                        MJTK {item.article.toUpperCase()} • +{getPenaltyPoints(item)} Ball
+                      </span>
+                    </div>
+                    <button
+                      className="simulated-item-remove-btn"
+                      onClick={() => handleRemoveSimulated(index)}
+                      aria-label="O'chirish"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="penalty-simulator-right">
+          <h2>HAYDOVCHILIK BALLARI SIMULYATSIYASI (QOIDABUZARLIK QO'SHISH)</h2>
+          <p>Balga sabab bo'luvchi qoidabuzarliklar ustiga + Belgi bosish orqali ballarni tekshirib boring:</p>
+
+          <div className="sim-penalties-list">
+            {penalties
+              .filter((p) => getPenaltyPoints(p) > 0)
+              .map((penalty) => {
+                const pts = getPenaltyPoints(penalty);
+                return (
+                  <div
+                    className="sim-penalty-row-card clickable"
+                    key={penalty.id}
+                    onClick={() => handleAddSimulated(penalty)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        handleAddSimulated(penalty);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="sim-penalty-row-body">
+                      <span className="sim-penalty-row-article">
+                        MJTK {penalty.article.toUpperCase()}
+                      </span>
+                      <h4 className="sim-penalty-row-title">{clean(penalty.title)}</h4>
+                      <p className="sim-penalty-row-desc">{clean(penalty.description)}</p>
+                    </div>
+                    <div className="sim-penalty-row-actions">
+                      <span className="sim-penalty-row-points">+{pts} Ball</span>
+                      <button
+                        className="sim-penalty-row-add-btn"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleAddSimulated(penalty);
+                        }}
+                        aria-label="Qo'shish"
+                      >
+                        <Plus size={18} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -851,6 +1714,7 @@ const autodromeTabs = [
 
 function AutodromePage() {
   const [activeTab, setActiveTab] = useState<(typeof autodromeTabs)[number]["id"]>("be-ce-de");
+  const [selectedImage, setSelectedImage] = useState<(typeof autodromeTabs)[number]["images"][number] | null>(null);
   const active = autodromeTabs.find((tab) => tab.id === activeTab) ?? autodromeTabs[0];
 
   return (
@@ -866,7 +1730,10 @@ function AutodromePage() {
           <button
             key={tab.id}
             className={active.id === tab.id ? "active" : ""}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setSelectedImage(null);
+            }}
           >
             {tab.label}
           </button>
@@ -908,15 +1775,44 @@ function AutodromePage() {
           <span>Sxema</span>
           <h2>{active.label} avtodrom sxemasi</h2>
         </div>
-        <div className="autodrome-scheme-gallery">
+        <div className={`autodrome-scheme-gallery ${active.id === "b-c-d" ? "bcd-gallery" : ""}`}>
           {active.images.map((image) => (
             <figure className="autodrome-scheme-figure" key={image.src}>
-              <img className="autodrome-scheme-image" src={image.src} alt={image.label} />
+              <button
+                className="autodrome-scheme-preview"
+                onClick={() => setSelectedImage(image)}
+                type="button"
+              >
+                <img className="autodrome-scheme-image" src={image.src} alt={image.label} />
+              </button>
               <figcaption>{image.label}</figcaption>
             </figure>
           ))}
         </div>
       </section>
+
+      {selectedImage && (
+        <div className="autodrome-image-modal-backdrop" onClick={() => setSelectedImage(null)} role="presentation">
+          <section
+            aria-label={selectedImage.label}
+            aria-modal="true"
+            className="autodrome-image-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <header>
+              <h2>{selectedImage.label}</h2>
+              <button onClick={() => setSelectedImage(null)} type="button" aria-label="Yopish">
+                <X size={20} />
+              </button>
+            </header>
+            <div className="autodrome-image-modal-body">
+              <img src={selectedImage.src} alt={selectedImage.label} />
+            </div>
+          </section>
+        </div>
+      )}
+      
     </div>
   );
 }
@@ -924,11 +1820,159 @@ function AutodromePage() {
 type TemplateFilter = "all" | "completed" | "not-started" | "saved" | "weak";
 type TemplateSort = "number" | "best" | "not-started";
 
+function RandomTestsPage({
+  data,
+  summary,
+  onStart,
+}: {
+  data: AppData;
+  summary: ProgressSummary | null;
+  onStart: (config: RandomTestConfig) => void;
+}) {
+  const [questionCount, setQuestionCount] = useState(20);
+  const totalQuestions = data.counts.questions || 0;
+  const answered = summary?.answered ?? 0;
+  const correct = summary?.correct ?? 0;
+  const wrong = Math.max(0, answered - correct);
+  const attempts = summary?.attempts ?? 0;
+  const accuracy = answered ? Math.round((correct / answered) * 100) : 0;
+  const progressPercent = totalQuestions ? Math.min(100, Math.round((answered / totalQuestions) * 100)) : 0;
+  const latestAttempt = summary?.latestAttempt;
+  const updatedAt = latestAttempt?.createdAt ? new Date(latestAttempt.createdAt) : new Date();
+  const createdLabel = latestAttempt?.createdAt ? new Date(latestAttempt.createdAt).toLocaleString("uz-Latn-UZ") : "Hali boshlanmagan";
+  const updatedLabel = updatedAt.toLocaleString("uz-Latn-UZ");
+  const durationMinutes = questionCount <= 20 ? 25 : questionCount <= 50 ? 60 : 120;
+  const selectedMode = questionCount === 20 ? "Tezkor mashq" : questionCount === 50 ? "Chuqur mashq" : "Marafon";
+
+  function startRandomTest() {
+    onStart({
+      count: questionCount,
+      durationMinutes,
+      seed: `${Date.now()}-${questionCount}-${attempts}`,
+      startedAt: new Date().toISOString(),
+    });
+  }
+
+  return (
+    <div className="page-shell random-tests-page">
+      <section className="random-title-card card">
+        <div>
+          <span>Test markazi</span>
+          <h1>Aralash testlar</h1>
+        </div>
+        <p>Savollar bazadan har safar yangi tartibda olinadi. Maqsad: tez fikrlash, real imtihonga yaqin ritm va aniq progress.</p>
+      </section>
+
+      <section className="card random-console">
+        <div className="random-hero">
+          <div className="random-hero-copy">
+            <span className="tag">Adaptive practice</span>
+            <h2>{selectedMode}</h2>
+            <p>{questionCount} ta savol, {durationMinutes} daqiqa. Javoblar yakunda tekshiriladi va urinish progressga qo'shiladi.</p>
+          </div>
+          <div className="random-hero-score">
+            <span>Tayyorlik</span>
+            <strong>{accuracy}%</strong>
+            <div><span style={{ width: `${accuracy}%` }} /></div>
+          </div>
+        </div>
+
+        <div className="random-console-grid">
+          <div className="random-metrics">
+            <div className="random-metric success">
+              <CheckCircle2 size={18} />
+              <span>To'g'ri javoblar</span>
+              <strong>{correct}</strong>
+            </div>
+            <div className="random-metric danger">
+              <X size={18} />
+              <span>Noto'g'ri javoblar</span>
+              <strong>{wrong}</strong>
+            </div>
+            <div className="random-metric warning">
+              <ListChecks size={18} />
+              <span>Jami ishlangan testlar</span>
+              <strong>{attempts}</strong>
+            </div>
+            <div className="random-metric info">
+              <ClipboardList size={18} />
+              <span>Jami savollar</span>
+              <strong>{totalQuestions}</strong>
+            </div>
+
+            <div className="random-metric neutral">
+              <Timer size={18} />
+              <span>Tanlangan vaqt</span>
+              <strong>{durationMinutes}m</strong>
+            </div>
+            <div className="random-metric neutral">
+              <Gauge size={18} />
+              <span>Aniqlik</span>
+              <strong>{accuracy}%</strong>
+            </div>
+            <div className="random-date-card">
+              <span>Yaratilgan vaqt</span>
+              <strong>{createdLabel}</strong>
+            </div>
+            <div className="random-date-card">
+              <span>Yangilangan vaqt</span>
+              <strong>{updatedLabel}</strong>
+            </div>
+          </div>
+
+          <aside className="random-start-panel">
+            <div className="random-start-head">
+              <span>Test sozlamasi</span>
+              <strong>{selectedMode}</strong>
+            </div>
+            <div className="random-count-tabs" aria-label="Savollar soni">
+              {[
+                [20, "Tezkor"],
+                [50, "Standart"],
+                [100, "Marafon"],
+              ].map(([count, label]) => {
+                const minutes = Number(count) <= 20 ? 25 : Number(count) <= 50 ? 60 : 120;
+                return (
+                  <button
+                    className={questionCount === count ? "active" : ""}
+                    key={count}
+                    onClick={() => setQuestionCount(Number(count))}
+                    type="button"
+                  >
+                    <strong>{count}</strong>
+                    <span>{label}</span>
+                    <small>{minutes} daqiqa</small>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="random-progress-row">
+              <div><span style={{ width: `${progressPercent}%` }} /></div>
+              <strong>{progressPercent}%</strong>
+            </div>
+            <button className="random-start-button" onClick={startRandomTest} type="button">
+              <PlayCircle size={18} />
+              Yangi test boshlash
+            </button>
+            <div className="random-start-foot">
+              <span>{progressPercent}% baza qamrab olingan</span>
+              <span>{attempts} urinish</span>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => void }) {
   const [templates, setTemplates] = useState<TestTemplate[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TemplateFilter>("all");
   const [sort, setSort] = useState<TemplateSort>("number");
+  const [sortOpen, setSortOpen] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState<TestTemplate | null>(null);
+  const [examLanguage, setExamLanguage] = useState<"uz" | "cyrl" | "ru">("uz");
   const [visible, setVisible] = useState(24);
 
   useEffect(() => {
@@ -957,6 +2001,13 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
   const visibleTemplates = filtered.slice(0, visible);
   const completedCount = templates.filter((template) => template.completed).length;
   const bestScore = templates.reduce((best, template) => Math.max(best, Number(template.bestPercent || 0)), 0);
+  const nextTemplate = templates.find((template) => !template.completed) ?? templates[0];
+  const sortOptions: { id: TemplateSort; label: string }[] = [
+    { id: "number", label: "Shablon raqami" },
+    { id: "best", label: "Eng yaxshi natija" },
+    { id: "not-started", label: "Boshlanmagan" },
+  ];
+  const activeSortLabel = sortOptions.find((option) => option.id === sort)?.label ?? "Shablon raqami";
 
   async function toggleSaved(event: React.MouseEvent, template: TestTemplate) {
     event.stopPropagation();
@@ -966,13 +2017,41 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
     );
   }
 
+  function openStartModal(template: TestTemplate) {
+    setPendingTemplate(template);
+  }
+
+  function confirmStart() {
+    if (!pendingTemplate) return;
+    onStart(pendingTemplate);
+    setPendingTemplate(null);
+  }
+
   return (
     <div className="template-page page-shell">
       <PageHeader
-        eyebrow="Imtihon katalogi"
+        eyebrow="Exam center"
         title="Shablon testlar"
-        subtitle="62 ta imtihon varianti, lokal savollar va real progress bilan."
+        subtitle="Real imtihon tartibida 20 ta savol, 25 daqiqa va aniq natija."
       />
+
+      <section className="card template-hero">
+        <div>
+          <span className="tag">Imtihon rejimi</span>
+          <h2>{nextTemplate ? "Davom ettirish" : "Boshlash uchun shablon tanlang"}</h2>
+          <p>
+            {nextTemplate
+              ? `${nextTemplate.id}-shablondan boshlang. Javoblar imtihon yakuniga qadar tekshirilmaydi, natija esa alohida ko'rinadi.`
+              : "Katalogdan istalgan shablonni tanlab, imtihon oqimini boshlang."}
+          </p>
+        </div>
+        <div className="template-hero-actions">
+          <button className="primary-button" disabled={!nextTemplate} onClick={() => nextTemplate && openStartModal(nextTemplate)}>
+            {nextTemplate ? `${nextTemplate.id}-shablonni boshlash` : "Shablon yo'q"}
+          </button>
+          <span>{completedCount}/{templates.length || 62} yakunlangan</span>
+        </div>
+      </section>
 
       <section className="template-summary">
         <div><strong>{templates.length || 62}</strong><span>shablon</span></div>
@@ -983,32 +2062,69 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
       </section>
 
       <section className="card template-controls">
-        <label className="search-box wide">
-          <Search size={17} />
-          <input value={query} onChange={(event) => { setVisible(24); setQuery(event.target.value); }} placeholder="Shablon raqami yoki nomi" />
-        </label>
-        <div className="template-filters">
-          {[
-            ["all", "All"],
-            ["completed", "Completed"],
-            ["not-started", "Not started"],
-            ["saved", "Saved"],
-            ["weak", "Weak result"],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              className={`pill ${filter === id ? "active" : ""}`}
-              onClick={() => { setVisible(24); setFilter(id as TemplateFilter); }}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="template-search-panel">
+          <span>Qidirish</span>
+          <label className="search-box wide">
+            <Search size={17} />
+            <input value={query} onChange={(event) => { setVisible(24); setQuery(event.target.value); }} placeholder="Shablon raqami yoki nomi" />
+          </label>
         </div>
-        <select value={sort} onChange={(event) => setSort(event.target.value as TemplateSort)}>
-          <option value="number">Template number</option>
-          <option value="best">Best score</option>
-          <option value="not-started">Not started</option>
-        </select>
+        <div className="template-filter-panel">
+          <span>Holat</span>
+          <div className="template-filters">
+            {[
+              ["all", "Barchasi"],
+              ["completed", "Yakunlangan"],
+              ["not-started", "Boshlanmagan"],
+              ["saved", "Saqlangan"],
+              ["weak", "Zaif natija"],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                className={`pill ${filter === id ? "active" : ""}`}
+                onClick={() => { setVisible(24); setFilter(id as TemplateFilter); }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="template-sort-panel">
+          <span>Saralash</span>
+          <div className="template-sort-menu">
+            <button
+              aria-expanded={sortOpen}
+              aria-haspopup="listbox"
+              className="template-sort-trigger"
+              onBlur={() => window.setTimeout(() => setSortOpen(false), 120)}
+              onClick={() => setSortOpen((open) => !open)}
+              type="button"
+            >
+              <span>{activeSortLabel}</span>
+              <ChevronDown size={16} />
+            </button>
+            {sortOpen && (
+              <div className="template-sort-options" role="listbox">
+                {sortOptions.map((option) => (
+                  <button
+                    aria-selected={sort === option.id}
+                    className={sort === option.id ? "active" : ""}
+                    key={option.id}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setSort(option.id);
+                      setSortOpen(false);
+                    }}
+                    role="option"
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
       <section className="template-grid">
@@ -1017,24 +2133,29 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
           const completed = Boolean(template.completed);
           const weak = completed && percent < 70;
           return (
-            <article className={`template-card card ${completed ? "completed" : ""} ${weak ? "weak" : ""}`} key={template.id} onClick={() => onStart(template)}>
+            <article className={`template-card card ${completed ? "completed" : ""} ${weak ? "weak" : ""}`} key={template.id} onClick={() => openStartModal(template)}>
               <button className={`bookmark-button ${template.saved ? "saved" : ""}`} onClick={(event) => toggleSaved(event, template)} aria-label="Save template">
                 <Bookmark size={18} />
               </button>
-              <h2>{template.id} SHABLON</h2>
+              <div className="template-card-head">
+                <h2>{template.id} SHABLON</h2>
+                <span className={`template-status ${weak ? "weak" : completed ? "completed" : "idle"}`}>
+                  {weak ? "Zaif" : completed ? "Yakunlangan" : "Yangi"}
+                </span>
+              </div>
               <div className="template-card-body">
                 <span className="template-status-ring">
                   {completed ? <CheckCircle2 size={24} /> : <PlayCircle size={24} />}
                 </span>
                 <div className="template-card-meta">
+                  <p>Eng yaxshi: <strong>{percent}%</strong></p>
                   <p>To'g'ri javoblar: <strong>{Math.round((percent / 100) * Number(template.questions || 20))}</strong></p>
                   <p>Savol: <strong>{template.questions || 20}</strong></p>
-                  <p>Vaqt: <strong>{template.durationMinutes || 25} daqiqa</strong></p>
                 </div>
               </div>
-              <span className={`template-status ${weak ? "weak" : completed ? "completed" : "idle"}`}>
-                {weak ? "Weak" : completed ? "Completed" : "Not started"}
-              </span>
+              <button className="template-start-button" onClick={(event) => { event.stopPropagation(); openStartModal(template); }}>
+                Boshlash
+              </button>
             </article>
           );
         })}
@@ -1042,8 +2163,77 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
 
       {visible < filtered.length && (
         <button className="template-load-more" onClick={() => setVisible((count) => count + 24)}>
-          Load more ({filtered.length - visible} left)
+          Yana ko'rsatish ({filtered.length - visible})
         </button>
+      )}
+
+      {pendingTemplate && (
+        <div className="exam-start-backdrop" onMouseDown={() => setPendingTemplate(null)} role="presentation">
+          <section
+            aria-label={`${pendingTemplate.id}-shablon imtihon sozlamalari`}
+            aria-modal="true"
+            className="exam-start-modal"
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <header className="exam-start-header">
+              <div>
+                <span className="tag">Imtihonga tayyorlanish</span>
+                <h2>{pendingTemplate.id}-shablon</h2>
+                <p>Test boshlangandan keyin savollar alohida, chalg'itmaydigan imtihon ekranida ochiladi.</p>
+              </div>
+              <button className="icon-button" onClick={() => setPendingTemplate(null)} type="button" aria-label="Yopish">
+                <X size={18} />
+              </button>
+            </header>
+
+            <div className="exam-start-stats">
+              <div><strong>{pendingTemplate.questions || 20}</strong><span>savol</span></div>
+              <div><strong>{pendingTemplate.durationMinutes || 25}</strong><span>daqiqa</span></div>
+              <div><strong>{Number(pendingTemplate.bestPercent || 0)}%</strong><span>eng yaxshi</span></div>
+            </div>
+
+            <div className="exam-start-section">
+              <span>Til</span>
+              <div className="exam-language-options">
+                {[
+                  ["uz", "O'zbek"],
+                  ["cyrl", "Кирилл"],
+                  ["ru", "Рус"],
+                ].map(([id, label]) => (
+                  <button
+                    className={examLanguage === id ? "active" : ""}
+                    key={id}
+                    onClick={() => setExamLanguage(id as typeof examLanguage)}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="exam-start-rules">
+              <div>
+                <CheckCircle2 size={17} />
+                <span>Javoblar imtihon yakunida tekshiriladi.</span>
+              </div>
+              <div>
+                <Timer size={17} />
+                <span>V1 uchun vaqt ko'rsatkichi statik, keyingi bosqichda haqiqiy timer ulanadi.</span>
+              </div>
+              <div>
+                <ShieldAlert size={17} />
+                <span>3 tadan ortiq xato real imtihonga tayyorgarlikda xavfli signal hisoblanadi.</span>
+              </div>
+            </div>
+
+            <footer className="exam-start-actions">
+              <button className="ghost-button" onClick={() => setPendingTemplate(null)} type="button">Bekor qilish</button>
+              <button className="primary-button" onClick={confirmStart} type="button">Imtihonni boshlash</button>
+            </footer>
+          </section>
+        </div>
       )}
     </div>
   );
@@ -1052,12 +2242,14 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
 function QuestionStudio({
   mode,
   activeTemplate,
+  randomConfig,
   onBack,
   onProgress,
   onAskTutor,
 }: {
   mode: View;
   activeTemplate?: TestTemplate | null;
+  randomConfig?: RandomTestConfig | null;
   onBack?: () => void;
   onProgress: () => void;
   onAskTutor: (question: Question) => void;
@@ -1066,47 +2258,263 @@ function QuestionStudio({
   const [hasVideo, setHasVideo] = useState(false);
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<QuestionResponse | null>(null);
+  const [examResult, setExamResult] = useState<QuestionResponse | null>(null);
   const [selected, setSelected] = useState<Record<number, number>>({});
+  const [draftSelected, setDraftSelected] = useState<Record<number, number>>({});
+  const [markedQuestions, setMarkedQuestions] = useState<Set<number>>(new Set());
+  const [fontScale, setFontScale] = useState(1);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
+  const [focusImage, setFocusImage] = useState<Question | null>(null);
+  const [showResult, setShowResult] = useState(false);
+  const [mediaTabs, setMediaTabs] = useState<Record<number, "image" | "video">>({});
+  const [savedQuestionIds, setSavedQuestionIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    getQuestions({ page, pageSize: 1, query, hasVideo: hasVideo || undefined, templateId: activeTemplate?.id }).then(setResult).catch(console.error);
-  }, [page, query, hasVideo, activeTemplate?.id]);
+    const pageSize = mode === "all-tests" && !activeTemplate ? 8 : 1;
+    getQuestions({ page, pageSize, query, hasVideo: hasVideo || undefined, templateId: activeTemplate?.id }).then(setResult).catch(console.error);
+  }, [page, query, hasVideo, activeTemplate?.id, mode]);
 
-  const modeLabel = activeTemplate ? `${activeTemplate.id} Shablon` : viewTitles[mode];
+  useEffect(() => {
+    if (mode !== "all-tests") return;
+    getSavedQuestions()
+      .then((response) => setSavedQuestionIds(new Set(response.data.map((question) => question.id))))
+      .catch(console.error);
+  }, [mode]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelected({});
+    setDraftSelected({});
+    setMarkedQuestions(new Set());
+    setMediaTabs({});
+    setShowResult(false);
+    setFinishConfirmOpen(false);
+    setExamResult(null);
+    setTimeRemaining((activeTemplate?.durationMinutes || randomConfig?.durationMinutes || 25) * 60);
+    if (activeTemplate?.id) {
+      getQuestions({ page: 1, pageSize: activeTemplate.questions || 20, templateId: activeTemplate.id }).then(setExamResult).catch(console.error);
+      return;
+    }
+    if (randomConfig) {
+      getQuestions({ page: 1, pageSize: randomConfig.count, random: true, seed: randomConfig.seed }).then(setExamResult).catch(console.error);
+    }
+  }, [activeTemplate?.id, activeTemplate?.questions, randomConfig?.count, randomConfig?.seed, randomConfig?.durationMinutes]);
+
+  const modeLabel = activeTemplate ? `${activeTemplate.id} Shablon` : randomConfig ? randomConfig.label || "Aralash testlar" : viewTitles[mode];
+  const isExam = Boolean(activeTemplate || randomConfig);
+  const isAllTests = mode === "all-tests" && !isExam;
+  const examQuestions = isExam ? examResult?.data ?? [] : result?.data ?? [];
+  const examTotal = activeTemplate ? activeTemplate.questions || examResult?.data.length || 20 : randomConfig ? randomConfig.count : result?.data.length ?? 0;
+  const answeredCount = examQuestions.filter((question) => selected[question.id]).length;
   const score = useMemo(() => {
-    if (!result) return 0;
-    return result.data.filter((q) => {
+    return examQuestions.filter((q) => {
       const picked = selected[q.id];
       return q.answers.find((answer) => answer.id === picked)?.correct;
     }).length;
-  }, [result, selected]);
+  }, [examQuestions, selected]);
+  const wrongCount = Math.max(0, answeredCount - score);
+  const scorePercent = examTotal ? Math.round((score / examTotal) * 100) : 0;
+  const formatExamTime = (seconds: number) => {
+    const safeSeconds = Math.max(0, seconds);
+    const minutes = Math.floor(safeSeconds / 60);
+    const rest = safeSeconds % 60;
+    return `${minutes}:${String(rest).padStart(2, "0")}`;
+  };
 
   async function answerQuestion(question: Question, answerId: number) {
+    if (isExam) {
+      setDraftSelected((current) => ({ ...current, [question.id]: answerId }));
+      return;
+    }
     const answer = question.answers.find((item) => item.id === answerId);
     setSelected((current) => ({ ...current, [question.id]: answerId }));
+    if (mode === "all-tests" && question.video) {
+      setMediaTabs((current) => ({ ...current, [question.id]: "video" }));
+    }
     await saveQuestionProgress({ questionId: question.id, answerId, correct: Boolean(answer?.correct) });
     onProgress();
   }
 
-  async function finishAttempt() {
-    if (!result) return;
-    await saveTestAttempt({ mode: activeTemplate ? `template-tests:${activeTemplate.id}` : mode, score, total: result.data.length });
+  async function toggleSavedQuestion(question: Question) {
+    const saved = savedQuestionIds.has(question.id);
+    setSavedQuestionIds((current) => {
+      const next = new Set(current);
+      if (saved) next.delete(question.id);
+      else next.add(question.id);
+      return next;
+    });
+    await saveQuestion({ questionId: question.id, saved: !saved });
     onProgress();
   }
 
-  const currentQuestion = result?.data[0];
-  const picked = currentQuestion ? selected[currentQuestion.id] : undefined;
+  async function confirmAnswer(question: Question) {
+    const answerId = draftSelected[question.id] ?? selected[question.id];
+    if (!answerId) return;
+    const answer = question.answers.find((item) => item.id === answerId);
+    setSelected((current) => ({ ...current, [question.id]: answerId }));
+    setDraftSelected((current) => {
+      const next = { ...current };
+      delete next[question.id];
+      return next;
+    });
+    await saveQuestionProgress({ questionId: question.id, answerId, correct: Boolean(answer?.correct) });
+    onProgress();
+  }
+
+  async function finishAttempt(force = false) {
+    if (!result && !examResult) return;
+    if (isExam && !force && unansweredCount > 0) {
+      setFinishConfirmOpen(true);
+      return;
+    }
+    setFinishConfirmOpen(false);
+    await saveTestAttempt({ mode: activeTemplate ? `template-tests:${activeTemplate.id}` : randomConfig ? randomConfig.label === "Yakuniy imtihon" ? "final-exam" : `random-tests:${randomConfig.count}` : mode, score, total: examTotal || result?.data.length || examQuestions.length });
+    onProgress();
+    if (isExam) setShowResult(true);
+  }
+
+  function restartExam() {
+    setSelected({});
+    setDraftSelected({});
+    setMarkedQuestions(new Set());
+    setShowResult(false);
+    setFinishConfirmOpen(false);
+    setPage(1);
+    setTimeRemaining((activeTemplate?.durationMinutes || randomConfig?.durationMinutes || 25) * 60);
+  }
+
+  function reviewMistakes() {
+    const firstWrongIndex = examQuestions.findIndex((question) => {
+      const picked = selected[question.id];
+      return picked && !question.answers.find((answer) => answer.id === picked)?.correct;
+    });
+    setShowResult(true);
+    setPage(firstWrongIndex >= 0 ? firstWrongIndex + 1 : 1);
+  }
+
+  const currentQuestion = isExam ? examQuestions[page - 1] : result?.data[0];
+  const picked = currentQuestion ? draftSelected[currentQuestion.id] ?? selected[currentQuestion.id] : undefined;
+  const confirmedPicked = currentQuestion ? selected[currentQuestion.id] : undefined;
   const pickedAnswer = currentQuestion?.answers.find((answer) => answer.id === picked);
+  const examProgressPercent = examTotal ? Math.round((answeredCount / examTotal) * 100) : 0;
+  const unansweredCount = Math.max(0, examTotal - answeredCount);
+  const currentMarked = currentQuestion ? markedQuestions.has(currentQuestion.id) : false;
+  const studentName = "AVTOLEARN TALABA";
+  const questionTotal = result?.total ?? 0;
+  const totalPages = result?.totalPages ?? 1;
+  const libraryProgress = totalPages ? Math.round((page / totalPages) * 100) : 0;
+
+  useEffect(() => {
+    if (!isExam || showResult || timeRemaining <= 0) return;
+    const timerId = window.setInterval(() => {
+      setTimeRemaining((seconds) => {
+        if (seconds <= 1) {
+          window.clearInterval(timerId);
+          setShowResult(true);
+          return 0;
+        }
+        return seconds - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timerId);
+  }, [isExam, showResult, timeRemaining]);
+
+  useEffect(() => {
+    if (!isExam || !currentQuestion) return;
+    const question = currentQuestion;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onBack?.();
+        return;
+      }
+      if (event.key.toLowerCase() === "f" && question.image) {
+        setFocusImage(question);
+        return;
+      }
+      if (event.key === "Enter") {
+        void confirmAnswer(question);
+        return;
+      }
+      const functionMatch = event.key.match(/^F([1-4])$/);
+      const numberMatch = event.key.match(/^[1-4]$/);
+      const index = functionMatch ? Number(functionMatch[1]) - 1 : numberMatch ? Number(event.key) - 1 : -1;
+      const answer = question.answers[index];
+      if (answer) {
+        event.preventDefault();
+        void answerQuestion(question, answer.id);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [currentQuestion, isExam, onBack, draftSelected, selected]);
 
   return (
-    <div className="page-shell questions-page">
+    <div className={`page-shell questions-page ${isExam ? "exam-page" : ""} ${isAllTests ? "all-tests-page" : ""} ${isExam && showResult ? "exam-result-mode" : ""}`}>
+      {isExam && (
+        <section className="card exam-cockpit-header">
+          <div className="exam-brand">
+            <img src={LOGO_PATH} alt="AvtoLearn" />
+          </div>
+          <div className="exam-title-block">
+            <span>Imtihon rejimi</span>
+            <h1>{modeLabel}</h1>
+            <div className="exam-header-progress">
+              <span style={{ width: `${examProgressPercent}%` }} />
+            </div>
+            <p>{answeredCount}/{examTotal} javob berildi</p>
+          </div>
+          <div className="exam-candidate">
+            <span>Topshiruvchi</span>
+            <strong>{studentName}</strong>
+            <em>Imtihonda - faol</em>
+          </div>
+          <div className="exam-kpis">
+            <span className={`exam-timer-chip ${timeRemaining <= 300 ? "urgent" : ""}`}><Timer size={16} /> {formatExamTime(timeRemaining)}</span>
+            <span><ClipboardList size={16} /> {unansweredCount} ta qolgan</span>
+            <button className="ghost-button compact" onClick={() => setFontScale((value) => Math.min(1.18, Number((value + 0.06).toFixed(2))))}>A+</button>
+            <button className="ghost-button compact" onClick={() => setFontScale((value) => Math.max(.92, Number((value - 0.06).toFixed(2))))}>A-</button>
+            <button className="ghost-button" onClick={onBack}><ArrowLeft size={16} /> Chiqish</button>
+          </div>
+        </section>
+      )}
+
+      {isExam && showResult && (
+        <section className="card exam-result-card">
+          <span className="tag">Natija</span>
+          <h2>{score}/{examTotal} to'g'ri javob</h2>
+          <div className="exam-result-meter"><span style={{ width: `${scorePercent}%` }} /></div>
+          <div className="exam-result-stats">
+            <div><strong>{scorePercent}%</strong><span>foiz</span></div>
+            <div><strong>{score}</strong><span>to'g'ri</span></div>
+            <div><strong>{wrongCount}</strong><span>xato</span></div>
+          </div>
+          <div className="exam-result-actions">
+            <button className="primary-button" onClick={restartExam}>Qayta ishlash</button>
+            <button className="ghost-button" onClick={onBack}>{activeTemplate ? "Shablonlarga qaytish" : "Aralash testlarga qaytish"}</button>
+            <button className="ghost-button" disabled={wrongCount === 0} onClick={reviewMistakes}>Xatolarni ko'rish</button>
+          </div>
+        </section>
+      )}
+
+      {isExam && <div className="exam-bottom-timer">{activeTemplate?.durationMinutes || randomConfig?.durationMinutes || 25}:00</div>}
+      {!isExam && isAllTests && (
+        <section className="card all-tests-header">
+          <h1>{modeLabel}</h1>
+          <label className="search-box wide">
+            <Search size={17} />
+            <input value={query} onChange={(e) => { setPage(1); setQuery(e.target.value); }} placeholder="Qidiruv..." />
+          </label>
+        </section>
+      )}
+      {!isExam && !isAllTests && <>
       <PageHeader
         title={modeLabel}
         subtitle={activeTemplate ? `${activeTemplate.questions || 20} savol • ${activeTemplate.durationMinutes || 25} daqiqa • shablon imtihon` : "Lokal savollar, rasm/video va izohlar bilan amaliy mashq."}
         actions={
           <>
             {onBack && <button className="ghost-button" onClick={onBack}><ArrowRight size={16} /> Katalogga qaytish</button>}
-            <button className="primary-button" onClick={finishAttempt}>Natijani saqlash</button>
+            <button className="primary-button" onClick={() => finishAttempt()}>Natijani saqlash</button>
           </>
         }
       />
@@ -1119,41 +2527,218 @@ function QuestionStudio({
           Faqat video
         </button>
       </section>
+      </>}
 
-      {currentQuestion && (
+      {!isExam && isAllTests && (
+        <section className="card question-toolbar">
+          <span>{questionTotal} ta savol</span>
+          <span>{page}/{totalPages} sahifa</span>
+          <span>{libraryProgress}% ko'rildi</span>
+          <button className={`pill ${hasVideo ? "active" : ""}`} onClick={() => { setPage(1); setHasVideo(!hasVideo); }}>
+            <Video size={15} />
+            Faqat video
+          </button>
+          <button className="ghost-button" onClick={() => currentQuestion && onAskTutor(currentQuestion)} disabled={!currentQuestion}>
+            <Bot size={16} />
+            AI izoh
+          </button>
+        </section>
+      )}
+
+      {isAllTests && result?.data.length ? (
+        <section className="all-tests-list">
+          {result.data.map((question, questionIndex) => {
+            const pickedForQuestion = selected[question.id];
+            const pickedAnswerForQuestion = question.answers.find((answer) => answer.id === pickedForQuestion);
+            const absoluteNumber = (page - 1) * result.pageSize + questionIndex + 1;
+            const activeMediaTab = mediaTabs[question.id] ?? "image";
+            return (
+              <article className="card all-test-card" key={question.id}>
+                <header className="all-test-card-head">
+                  <span>{absoluteNumber}</span>
+                  <h2>{clean(question.title)}</h2>
+                  <div className="all-test-card-actions">
+                    <button className={`ghost-button ${savedQuestionIds.has(question.id) ? "saved" : ""}`} onClick={() => toggleSavedQuestion(question)} type="button">
+                      <Bookmark size={16} />
+                      {savedQuestionIds.has(question.id) ? "Saqlangan" : "Saqlash"}
+                    </button>
+                    <button className="ghost-button" onClick={() => onAskTutor(question)} type="button">
+                      <Bot size={16} />
+                      AI izoh
+                    </button>
+                  </div>
+                </header>
+                <div className="all-test-card-body">
+                  <section className="all-test-media">
+                    <div className="all-test-section-title">
+                      <FileText size={15} />
+                      Vizual materiallar
+                    </div>
+                    <div className="all-test-tabs">
+                      <button className={activeMediaTab === "image" ? "active" : ""} onClick={() => setMediaTabs((current) => ({ ...current, [question.id]: "image" }))} type="button">
+                        <FileText size={13} /> Rasm
+                      </button>
+                      <button
+                        className={activeMediaTab === "video" ? "active" : ""}
+                        onClick={() => setMediaTabs((current) => ({ ...current, [question.id]: "video" }))}
+                        type="button"
+                      >
+                        <PlayCircle size={13} /> Video
+                      </button>
+                    </div>
+                    {activeMediaTab === "image" && (
+                      question.image ? <img className="question-media" src={asset(question.image)} alt={clean(question.title)} loading="lazy" /> : <div className="empty-state">Rasm biriktirilmagan</div>
+                    )}
+                    {activeMediaTab === "video" && (
+                      pickedForQuestion && question.video ? (
+                        <video className="question-video" src={asset(question.video)} controls preload="metadata" />
+                      ) : (
+                        <div className="video-answer-lock">
+                          <PlayCircle size={24} />
+                          <strong>Video javob</strong>
+                          <span>Avval javobni tanlang, keyin video izoh ochiladi.</span>
+                        </div>
+                      )
+                    )}
+                  </section>
+                  <section className="all-test-answers">
+                    <div className="all-test-section-title">
+                      <CheckCircle2 size={15} />
+                      Javob variantlari
+                    </div>
+                    <div className="answers">
+                      {question.answers.map((answer, index) => {
+                        const chosen = pickedForQuestion === answer.id;
+                        const revealed = Boolean(pickedForQuestion);
+                        return (
+                          <button
+                            key={answer.id}
+                            className={`answer ${chosen ? "chosen" : ""} ${revealed && answer.correct ? "correct" : ""} ${revealed && chosen && !answer.correct ? "wrong" : ""}`}
+                            onClick={() => answerQuestion(question, answer.id)}
+                            type="button"
+                          >
+                            <strong>{String.fromCharCode(65 + index)}<small>F{index + 1}</small></strong>
+                            <span>{clean(answer.text)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                </div>
+                {pickedForQuestion && (
+                  <footer className="all-test-explanation">
+                    <strong>{pickedAnswerForQuestion?.correct ? "To'g'ri javob" : "Izoh"}</strong>
+                    <p>{clean(question.explanation)}</p>
+                  </footer>
+                )}
+              </article>
+            );
+          })}
+        </section>
+      ) : null}
+
+      {currentQuestion && !isAllTests && (
+        <>
+        {isExam && (
+          <section className="exam-question-strip">
+            <div>
+              <span>Savol</span>
+              <strong>{page}/{examTotal}</strong>
+            </div>
+            <p>{clean(currentQuestion.title)}</p>
+            <button
+              className={`exam-mark-button ${currentMarked ? "marked" : ""}`}
+              onClick={() => setMarkedQuestions((current) => {
+                const next = new Set(current);
+                if (next.has(currentQuestion.id)) next.delete(currentQuestion.id);
+                else next.add(currentQuestion.id);
+                return next;
+              })}
+              type="button"
+            >
+              <Bookmark size={16} />
+              {currentMarked ? "Belgilangan" : "Belgilash"}
+            </button>
+          </section>
+        )}
         <section className="trainer-shell">
           <article className="card question-card trainer-media">
             <div className="question-head">
-              <span className="tag">#{currentQuestion.id}</span>
+              <span className="tag">{isAllTests ? "Savol" : `#${currentQuestion.id}`}</span>
               <span className="activity-badge">{result?.page ?? 1}/{result?.totalPages ?? 1}</span>
             </div>
             <h2>{clean(currentQuestion.title)}</h2>
-            {currentQuestion.image && <img className="question-media" src={asset(currentQuestion.image)} alt="" loading="lazy" />}
-            {currentQuestion.video && <video className="question-video" src={asset(currentQuestion.video)} controls preload="metadata" />}
-            {picked && <p className="explanation">{clean(currentQuestion.explanation)}</p>}
+            {currentQuestion.image && <img className="question-media" src={asset(currentQuestion.image)} alt={clean(currentQuestion.title)} loading="lazy" />}
+            {isExam && currentQuestion.image && (
+              <button className="exam-image-focus" onClick={() => setFocusImage(currentQuestion)} type="button">
+                <Expand size={16} />
+                F
+              </button>
+            )}
+            {!isExam && currentQuestion.video && <video className="question-video" src={asset(currentQuestion.video)} controls preload="metadata" />}
+            {(!isExam || showResult) && picked && <p className="explanation">{clean(currentQuestion.explanation)}</p>}
           </article>
 
           <aside className="card trainer-panel">
             <div className="trainer-progress">
-              <span>Jami: {result?.total ?? 0}</span>
-              <span>Natija: {score}/{result?.data.length ?? 0}</span>
+              <span>Jami: {isExam ? examTotal : result?.total ?? 0}</span>
+              <span>{isExam ? `Javob: ${answeredCount}/${examTotal}` : picked ? pickedAnswer?.correct ? "To'g'ri javob" : "Qayta ko'rib chiqing" : "Javob tanlanmagan"}</span>
             </div>
             <div className="answers">
               {currentQuestion.answers.map((answer, index) => {
                 const chosen = picked === answer.id;
-                const revealed = Boolean(picked);
+                const confirmed = confirmedPicked === answer.id;
+                const revealed = isExam ? showResult : Boolean(picked);
                 return (
                   <button
                     key={answer.id}
-                    className={`answer ${revealed && answer.correct ? "correct" : ""} ${chosen && !answer.correct ? "wrong" : ""}`}
+                    className={`answer ${chosen ? "chosen" : ""} ${chosen && !confirmed ? "pending" : ""} ${confirmed ? "confirmed" : ""} ${revealed && answer.correct ? "correct" : ""} ${revealed && chosen && !answer.correct ? "wrong" : ""}`}
                     onClick={() => answerQuestion(currentQuestion, answer.id)}
+                    style={isExam ? { fontSize: `${fontScale}em` } : undefined}
                   >
-                    <span>{index + 1}. {clean(answer.text)}</span>
+                    {isExam && <strong>{String.fromCharCode(65 + index)}<small>F{index + 1}</small></strong>}
+                    <span>{isExam ? clean(answer.text) : `${index + 1}. ${clean(answer.text)}`}</span>
                   </button>
                 );
               })}
             </div>
-            <div className="ai-context-card">
+            {isExam && (
+              <button
+                className="exam-confirm-button"
+                disabled={!currentQuestion || !picked || confirmedPicked === picked}
+                onClick={() => currentQuestion && confirmAnswer(currentQuestion)}
+                type="button"
+              >
+                Javobni tasdiqlash
+                <span>Enter</span>
+              </button>
+            )}
+            {isExam && (
+              <section className="question-navigator" aria-label="Savollar navigatsiyasi">
+                <div className="question-navigator-head">
+                  <strong>Savollar</strong>
+                  <span>{examProgressPercent}% bajarildi - {markedQuestions.size} belgilangan</span>
+                </div>
+                <div className="question-navigator-grid">
+                  {Array.from({ length: examTotal }, (_, index) => {
+                    const question = examQuestions[index];
+                    const answered = question ? Boolean(selected[question.id]) : false;
+                    const marked = question ? markedQuestions.has(question.id) : false;
+                    return (
+                      <button
+                        key={question?.id ?? index}
+                        className={`${page === index + 1 ? "current" : ""} ${answered ? "answered" : ""} ${marked ? "marked" : ""}`}
+                        onClick={() => setPage(index + 1)}
+                        type="button"
+                      >
+                        {index + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+            {(!isExam || showResult) && <div className="ai-context-card">
               <Bot size={18} />
               <div>
                 <strong>AI yordamchi</strong>
@@ -1162,45 +2747,432 @@ function QuestionStudio({
               <button className="ghost-button" onClick={() => onAskTutor(currentQuestion)}>
                 {pickedAnswer && !pickedAnswer.correct ? "Explain why" : "Ask AI"}
               </button>
-            </div>
-            <div className="trainer-actions">
+            </div>}
+            <div className={`trainer-actions ${isExam ? "exam-footer" : ""}`}>
               <button disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Oldingi</button>
-              <button className="primary-button" onClick={finishAttempt}>Saqlash</button>
-              <button disabled={!result || page >= result.totalPages} onClick={() => setPage((current) => current + 1)}>Keyingi</button>
+              <button className="primary-button" onClick={() => finishAttempt()}>{isExam ? "Yakunlash" : "Natijani saqlash"}</button>
+              <button disabled={isExam ? page >= examTotal : !result || page >= result.totalPages} onClick={() => setPage((current) => current + 1)}>Keyingi</button>
             </div>
           </aside>
         </section>
+        </>
       )}
 
-      <div className="pager">
+      {finishConfirmOpen && (
+        <div className="exam-dialog-backdrop" role="presentation" onMouseDown={() => setFinishConfirmOpen(false)}>
+          <section className="exam-dialog" role="dialog" aria-modal="true" aria-label="Imtihonni yakunlash" onMouseDown={(event) => event.stopPropagation()}>
+            <span className="tag">Yakunlash</span>
+            <h2>{unansweredCount} ta savol javobsiz</h2>
+            <p>Natija shu holatda hisoblanadi. Belgilangan yoki javobsiz savollarni tekshirib chiqishingiz mumkin.</p>
+            <div className="exam-dialog-actions">
+              <button className="ghost-button" onClick={() => setFinishConfirmOpen(false)}>Davom etish</button>
+              <button className="primary-button" onClick={() => finishAttempt(true)}>Baribir yakunlash</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {focusImage?.image && (
+        <div className="exam-image-modal" role="presentation" onMouseDown={() => setFocusImage(null)}>
+          <button className="icon-button" onClick={() => setFocusImage(null)} type="button" aria-label="Yopish">
+            <X size={18} />
+          </button>
+          <img src={asset(focusImage.image)} alt={clean(focusImage.title)} onMouseDown={(event) => event.stopPropagation()} />
+        </div>
+      )}
+
+      {!isExam && <div className="pager">
         <button disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Oldingi</button>
         <button disabled={!result || page >= result.totalPages} onClick={() => setPage((current) => current + 1)}>Keyingi</button>
-      </div>
+      </div>}
     </div>
   );
 }
 
-function MediaLibrary() {
-  const [result, setResult] = useState<QuestionResponse | null>(null);
-  useEffect(() => {
-    getQuestions({ page: 1, pageSize: 50, hasVideo: true }).then(setResult).catch(console.error);
+function SavedTestsPage({
+  onProgress,
+  onAskTutor,
+}: {
+  onProgress: () => void;
+  onAskTutor: (question: Question) => void;
+}) {
+  const [saved, setSaved] = useState<Question[]>([]);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Record<number, number>>({});
+  const [mediaTabs, setMediaTabs] = useState<Record<number, "image" | "video">>({});
+  const [loading, setLoading] = useState(true);
+
+  const loadSaved = useCallback(() => {
+    setLoading(true);
+    getSavedQuestions()
+      .then((response) => setSaved(response.data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadSaved();
+  }, [loadSaved]);
+
+  const filtered = saved.filter((question) => {
+    const haystack = `${question.title} ${question.explanation} ${question.answers.map((answer) => answer.text).join(" ")}`.toLowerCase();
+    return haystack.includes(query.toLowerCase());
+  });
+
+  async function answerSavedQuestion(question: Question, answerId: number) {
+    const answer = question.answers.find((item) => item.id === answerId);
+    setSelected((current) => ({ ...current, [question.id]: answerId }));
+    if (question.video) setMediaTabs((current) => ({ ...current, [question.id]: "video" }));
+    await saveQuestionProgress({ questionId: question.id, answerId, correct: Boolean(answer?.correct) });
+    onProgress();
+  }
+
+  async function removeSavedQuestion(question: Question) {
+    await saveQuestion({ questionId: question.id, saved: false });
+    setSaved((current) => current.filter((item) => item.id !== question.id));
+    onProgress();
+  }
+
   return (
-    <div className="page-shell">
-      <PageHeader title="Media kutubxona" subtitle="Offline video va rasmli savollar galereyasi." />
-      <div className="media-tabs">
-        <button className="pill active"><Video size={16} /> Videolar</button>
-        <button className="pill"><FileText size={16} /> Rasmlar</button>
-      </div>
-      <div className="media-grid">
-        {result?.data.map((question) => (
-          <article className="card media-card" key={question.id}>
-            {question.video ? <video src={asset(question.video)} controls preload="metadata" /> : <img src={asset(question.image)} alt="" />}
-            <h3>{clean(question.title)}</h3>
-            <span className="tag">#{question.id}</span>
-          </article>
-        ))}
-      </div>
+    <div className="page-shell saved-tests-page">
+      <section className="card saved-tests-header">
+        <div>
+          <span>Shaxsiy ro'yxat</span>
+          <h1>Saqlangan testlar</h1>
+          <p>Keyinroq qaytish, murakkab savollarni takrorlash va video izohlarni ko'rish uchun saqlangan testlar.</p>
+        </div>
+        <div className="saved-tests-kpis">
+          <article><strong>{saved.length}</strong><span>saqlangan</span></article>
+          <article><strong>{filtered.length}</strong><span>ko'rinmoqda</span></article>
+        </div>
+      </section>
+
+      <section className="card saved-tests-toolbar">
+        <label className="search-box wide">
+          <Search size={17} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Saqlangan testlardan qidirish..." />
+        </label>
+        <button className="ghost-button" onClick={loadSaved}>
+          <RefreshCcw size={16} />
+          Yangilash
+        </button>
+      </section>
+
+      {loading && <section className="card saved-empty"><strong>Yuklanmoqda...</strong></section>}
+
+      {!loading && filtered.length === 0 && (
+        <section className="card saved-empty">
+          <Bookmark size={34} />
+          <strong>{saved.length ? "Mos test topilmadi" : "Hali saqlangan test yo'q"}</strong>
+          <p>Barcha testlar sahifasida kerakli savolni “Saqlash” orqali shu yerga qo'shing.</p>
+        </section>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <section className="all-tests-list saved-tests-list">
+          {filtered.map((question, index) => {
+            const pickedForQuestion = selected[question.id];
+            const pickedAnswerForQuestion = question.answers.find((answer) => answer.id === pickedForQuestion);
+            const activeMediaTab = mediaTabs[question.id] ?? "image";
+            return (
+              <article className="card all-test-card saved-test-card" key={question.id}>
+                <header className="all-test-card-head">
+                  <span>{index + 1}</span>
+                  <h2>{clean(question.title)}</h2>
+                  <div className="all-test-card-actions">
+                    <button className="ghost-button danger" onClick={() => removeSavedQuestion(question)} type="button">
+                      <X size={16} />
+                      O'chirish
+                    </button>
+                    <button className="ghost-button" onClick={() => onAskTutor(question)} type="button">
+                      <Bot size={16} />
+                      AI izoh
+                    </button>
+                  </div>
+                </header>
+                <div className="all-test-card-body">
+                  <section className="all-test-media">
+                    <div className="all-test-section-title">
+                      <FileText size={15} />
+                      Vizual materiallar
+                    </div>
+                    <div className="all-test-tabs">
+                      <button className={activeMediaTab === "image" ? "active" : ""} onClick={() => setMediaTabs((current) => ({ ...current, [question.id]: "image" }))} type="button">
+                        <FileText size={13} /> Rasm
+                      </button>
+                      <button className={activeMediaTab === "video" ? "active" : ""} onClick={() => setMediaTabs((current) => ({ ...current, [question.id]: "video" }))} type="button">
+                        <PlayCircle size={13} /> Video
+                      </button>
+                    </div>
+                    {activeMediaTab === "image" && (
+                      question.image ? <img className="question-media" src={asset(question.image)} alt={clean(question.title)} loading="lazy" /> : <div className="empty-state">Rasm biriktirilmagan</div>
+                    )}
+                    {activeMediaTab === "video" && (
+                      pickedForQuestion && question.video ? (
+                        <video className="question-video" src={asset(question.video)} controls preload="metadata" />
+                      ) : (
+                        <div className="video-answer-lock">
+                          <PlayCircle size={24} />
+                          <strong>Video javob</strong>
+                          <span>Avval javobni tanlang, keyin video izoh ochiladi.</span>
+                        </div>
+                      )
+                    )}
+                  </section>
+                  <section className="all-test-answers">
+                    <div className="all-test-section-title">
+                      <CheckCircle2 size={15} />
+                      Javob variantlari
+                    </div>
+                    <div className="answers">
+                      {question.answers.map((answer, answerIndex) => {
+                        const chosen = pickedForQuestion === answer.id;
+                        const revealed = Boolean(pickedForQuestion);
+                        return (
+                          <button
+                            key={answer.id}
+                            className={`answer ${chosen ? "chosen" : ""} ${revealed && answer.correct ? "correct" : ""} ${revealed && chosen && !answer.correct ? "wrong" : ""}`}
+                            onClick={() => answerSavedQuestion(question, answer.id)}
+                            type="button"
+                          >
+                            <strong>{String.fromCharCode(65 + answerIndex)}<small>F{answerIndex + 1}</small></strong>
+                            <span>{clean(answer.text)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                </div>
+                {pickedForQuestion && (
+                  <footer className="all-test-explanation">
+                    <strong>{pickedAnswerForQuestion?.correct ? "To'g'ri javob" : "Izoh"}</strong>
+                    <p>{clean(question.explanation)}</p>
+                  </footer>
+                )}
+              </article>
+            );
+          })}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function FinalExamPage({
+  data,
+  summary,
+  onStart,
+}: {
+  data: AppData;
+  summary: ProgressSummary | null;
+  onStart: (config: RandomTestConfig) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [faceVerified, setFaceVerified] = useState(false);
+  const [capturedAt, setCapturedAt] = useState<string | null>(null);
+  const answered = summary?.answered ?? 0;
+  const attempts = summary?.attempts ?? 0;
+  const accuracy = summary?.accuracy ?? 0;
+  const passed = accuracy >= 70 && answered > 0;
+  const examTotal = 20;
+  const correctPreview = Math.min(examTotal, Math.max(0, Math.round((accuracy / 100) * examTotal)));
+  const wrongPreview = answered ? Math.max(0, examTotal - correctPreview) : 0;
+  const solvedAt = summary?.latestAttempt?.createdAt ? new Date(summary.latestAttempt.createdAt) : null;
+  const startDate = solvedAt ? new Date(solvedAt.getTime() - 25 * 60 * 1000) : null;
+  const endDate = solvedAt ? new Date(solvedAt.getTime() + 24 * 60 * 60 * 1000) : null;
+  const formatDate = (date: Date | null) => date ? date.toLocaleString("uz-UZ", { hour12: false }) : "Hali boshlanmagan";
+
+  async function startCamera() {
+    setCameraError("");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Brauzer kamera ruxsatini qo'llab-quvvatlamaydi.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraActive(true);
+      setFaceVerified(false);
+      setCapturedAt(null);
+    } catch {
+      setCameraError("Kameraga ruxsat berilmadi yoki kamera topilmadi.");
+    }
+  }
+
+  function captureFace() {
+    if (!cameraActive) return;
+    setCapturedAt(new Date().toLocaleString("uz-UZ", { hour12: false }));
+    setFaceVerified(true);
+    setCameraError("");
+  }
+
+  function startFinalExam() {
+    if (!faceVerified) return;
+    onStart({
+      count: 20,
+      durationMinutes: 25,
+      label: "Yakuniy imtihon",
+      seed: `final-exam-${Date.now()}`,
+      startedAt: new Date().toISOString(),
+    });
+  }
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Enter" && cameraActive && !faceVerified) {
+        event.preventDefault();
+        captureFace();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [cameraActive, faceVerified]);
+
+  return (
+    <div className="page-shell final-exam-page">
+      <section className="final-rules-banner">
+        <ShieldAlert size={22} />
+        <div>
+          <h1>Tizim qoidalari va akkreditatsiya ma'lumoti</h1>
+          <p>Yakuniy imtihonga shaxsiy kabinet egasi kirishi mumkin. Kamera orqali yuz tekshiruvi tasdiqlanmaguncha testni boshlash tugmasi ochilmaydi.</p>
+        </div>
+      </section>
+
+      <section className="final-exam-grid">
+        <article className="final-summary-card">
+          <header className="final-score-hero">
+            <div>
+              <span>Oxirgi urinish statistikasi</span>
+              <h2>Guruh: 02F-26 (Yakuniy imtihon)</h2>
+            </div>
+            <strong>{accuracy || 0}%</strong>
+            <small>{correctPreview}/{examTotal} to'g'ri javob</small>
+          </header>
+
+          <div className="final-score-stats">
+            <article>
+              <CheckCircle2 size={22} />
+              <strong>{correctPreview}</strong>
+              <span>To'g'ri javoblar</span>
+            </article>
+            <article>
+              <X size={22} />
+              <strong>{wrongPreview}</strong>
+              <span>Noto'g'ri javoblar</span>
+            </article>
+            <article>
+              <ListChecks size={22} />
+              <strong>{examTotal}</strong>
+              <span>Jami testlar</span>
+            </article>
+          </div>
+
+          <div className="final-info-grid">
+            <section>
+              <h3>Vaqt ma'lumotlari</h3>
+              <dl>
+                <div><dt>Reja boshlanishi:</dt><dd>{formatDate(startDate)}</dd></div>
+                <div><dt>Reja tugashi:</dt><dd>{formatDate(endDate)}</dd></div>
+                <div><dt>Urinish boshlangan:</dt><dd>{formatDate(startDate)}</dd></div>
+                <div><dt>Urinish tugagan:</dt><dd>{formatDate(solvedAt)}</dd></div>
+              </dl>
+            </section>
+            <section>
+              <h3>Sinxron holatlar</h3>
+              <dl>
+                <div><dt>Imtihon holati:</dt><dd><span className="final-status success">Faollashtirilgan</span></dd></div>
+                <div><dt>Imtihon natijasi:</dt><dd><span className={`final-status ${passed ? "success" : "warning"}`}>{passed ? "O'tgan" : "Kutilmoqda"}</span></dd></div>
+              </dl>
+              <p>Ma'lumotlar avtomatik sinxronlashtiriladi. Batafsil ko'rish uchun savollar ustiga bosing.</p>
+            </section>
+          </div>
+
+          <section className="final-question-results">
+            <div>
+              <h3>Savollar bo'yicha batafsil natijalar</h3>
+              <span>Sinash uchun raqamga bosing</span>
+            </div>
+            <div className="final-question-grid">
+              {Array.from({ length: examTotal }, (_, index) => {
+                const isCorrect = index < correctPreview;
+                const isWrong = answered > 0 && !isCorrect;
+                return (
+                  <button className={isWrong ? "wrong" : "correct"} key={index} type="button">
+                    <span>S-{index + 1}</span>
+                    {isWrong ? <X size={17} /> : <CheckCircle2 size={17} />}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </article>
+
+        <aside className="final-camera-column">
+          <section className="final-camera-card">
+            <h2><Video size={18} /> Yuzni tekshirish paneli</h2>
+            <div className={`final-camera-preview ${cameraActive ? "active" : ""} ${faceVerified ? "verified" : ""}`}>
+              {cameraActive ? (
+                <video ref={videoRef} muted playsInline />
+              ) : (
+                <div className="face-outline">
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              )}
+              <strong>{faceVerified ? "Yuz tasdiqlandi" : cameraActive ? "Kamera faol" : "Kamera nazorati so'ralmoqda"}</strong>
+              <p>
+                {faceVerified
+                  ? `Tasdiqlash vaqti: ${capturedAt}`
+                  : cameraActive
+                    ? "Yuzingizni ramka ichida tuting va rasmga olish tugmasini bosing."
+                    : "Davlat terminali xavfsizlik talablariga mos tarzda ishlash uchun real kamerangizni yoqing."}
+              </p>
+              {cameraError && <em>{cameraError}</em>}
+              <button onClick={startCamera} type="button">{cameraActive ? "Kamerani qayta ishga tushirish" : "Kamerani ishga tushirish"}</button>
+            </div>
+          </section>
+
+          <section className="final-guidance-card">
+            <h2><Lightbulb size={18} /> Yo'riqnoma va maslahatlar</h2>
+            <ul>
+              <li>Yuzingizni belgilangan qolip doirasida tuting.</li>
+              <li>Ko'zoynak yoki yuzni to'suvchi jismlarni yeching.</li>
+              <li>Veb-kamerangizga to'g'rima-to'g'ri qarang.</li>
+              <li>Rasmga olish uchun pastdagi tugma yoki Enter tugmasini bosing.</li>
+            </ul>
+          </section>
+
+          <button className={`final-disabled-action ${cameraActive && !faceVerified ? "ready" : ""}`} disabled={!cameraActive || faceVerified} onClick={captureFace} type="button">
+            <Download size={18} />
+            {faceVerified ? "Rasm olindi" : "Rasmga olish"}
+            <span>Enter</span>
+          </button>
+          <button className={`final-disabled-action ${faceVerified ? "verified" : ""}`} disabled type="button">
+            {faceVerified ? <CheckCircle2 size={18} /> : <ShieldAlert size={18} />}
+            {faceVerified ? "Yuz tasdiqlandi" : "Yuz tasdiqlanmagan"}
+          </button>
+          <button className="final-start-button" disabled={!faceVerified} onClick={startFinalExam} type="button">
+            <PlayCircle size={18} />
+            Yakuniy imtihonni boshlash
+          </button>
+        </aside>
+      </section>
     </div>
   );
 }

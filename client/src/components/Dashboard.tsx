@@ -28,7 +28,6 @@ type View =
   | "all-tests"
   | "saved-tests"
   | "final-exam"
-  | "media"
   | "ai";
 
 interface DashboardProps {
@@ -71,6 +70,13 @@ export function Dashboard({ data, summary, recent, setView }: DashboardProps) {
     ? Math.round((summary.latestAttempt.score / summary.latestAttempt.total) * 100)
     : 0;
   const weakQuestionCount = filteredQuestions.filter((item) => item.correct === false).length;
+  const shouldStudyLessons = answerPercent < 70;
+  const nextStepTitle = shouldStudyLessons ? "Savollar qamrovini oshiring" : "Natijani testlar bilan mustahkamlang";
+  const nextStepText = shouldStudyLessons
+    ? `${Math.max(totalQuestions - answerTotal, 0)} ta savol hali ishlanmagan. Darslarni davom ettirib, keyin aralash mashq bilan tekshiring.`
+    : "Qamrov yaxshi. Endi shablon testlar va yakuniy imtihon orqali barqaror natijani ushlab turing.";
+  const primaryActionLabel = shouldStudyLessons ? "Darslarni davom ettirish" : "Shablon testga o'tish";
+  const primaryActionView: View = shouldStudyLessons ? "lessons" : "template-tests";
 
   const kpiCards = [
     {
@@ -144,46 +150,38 @@ export function Dashboard({ data, summary, recent, setView }: DashboardProps) {
       <section className="dashboard-header">
         <div className="dashboard-heading">
           <span>Bosh sahifa</span>
-          <h1>Analitik markaz</h1>
-          <p>Test natijalari, savol qamrovi va o'qish faolligini real progress asosida kuzating.</p>
+          <h1>O'qishni davom ettiring</h1>
+          <p>Bugungi eng muhim qadamni tanlang, progressni kuzating va testlarga tayyorlaning.</p>
         </div>
-        <div className="date-range-picker">
-          <button className={`date-range-trigger ${filterOpen ? "active" : ""}`} onClick={() => setFilterOpen((open) => !open)}>
-            <CalendarDays size={17} />
-            <span>
-              <small>{range.label}</small>
-              <strong>{formatRangeLabel(range.start, range.end)}</strong>
-            </span>
-            <ChevronDown size={16} />
-          </button>
-          {filterOpen && (
-            <div className="date-range-popover">
-              <section>
-                <h3>Tez tanlash</h3>
-                <div className="quick-date-grid">
-                  <button onClick={() => applyPreset("today")}>Bugun</button>
-                  <button onClick={() => applyPreset("7")}>7 kun</button>
-                  <button className={range.label === "30 kun" ? "active" : ""} onClick={() => applyPreset("30")}>30 kun</button>
-                  <button onClick={() => applyPreset("month")}>Bu oy</button>
-                  <button onClick={() => applyPreset("year")}>Bu yil</button>
-                </div>
-              </section>
-              <section className="exact-date-section">
-                <h3>Aniq davr</h3>
-                <div className="exact-date-grid">
-                  <label>
-                    <span>Dan</span>
-                    <input type="date" value={draftStart || toInputDate(range.start)} onChange={(event) => setDraftStart(event.target.value)} />
-                  </label>
-                  <label>
-                    <span>Gacha</span>
-                    <input type="date" value={draftEnd || toInputDate(range.end)} onChange={(event) => setDraftEnd(event.target.value)} />
-                  </label>
-                </div>
-                <button className="apply-date-button" onClick={applyExactRange}>Qo'llash</button>
-              </section>
+      </section>
+
+      <section className="dashboard-continue-panel">
+        <div className="dashboard-continue-copy">
+          <span>Keyingi qadam</span>
+          <h2>{nextStepTitle}</h2>
+          <p>{nextStepText}</p>
+          <div className="progress-actions">
+            <button onClick={() => setView(primaryActionView)}>{primaryActionLabel}</button>
+            <button className="secondary" onClick={() => setView("random-tests")}>Aralash mashq</button>
+          </div>
+        </div>
+        <div className="dashboard-continue-stats" aria-label="O'quv holati">
+          <div className="dashboard-ring" style={{ "--score": answerPercent } as React.CSSProperties}>
+            <div>
+              <strong>{answerPercent}%</strong>
+              <span>qamrov</span>
             </div>
-          )}
+          </div>
+          <div className="continue-mini-stats">
+            <div>
+              <span>Aniqlik</span>
+              <strong>{accuracy}%</strong>
+            </div>
+            <div>
+              <span>Javoblar</span>
+              <strong>{answerTotal}</strong>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -208,7 +206,7 @@ export function Dashboard({ data, summary, recent, setView }: DashboardProps) {
               <h2>O'quv progressi</h2>
               <p>Umumiy qamrov va keyingi eng foydali qadam.</p>
             </div>
-            <span className="dashboard-pill">{range.label}</span>
+            <span className="dashboard-pill">{answerTotal}/{totalQuestions}</span>
           </div>
 
           <div className="progress-overview-body">
@@ -220,16 +218,10 @@ export function Dashboard({ data, summary, recent, setView }: DashboardProps) {
             </div>
             <div className="progress-summary">
               <span>Keyingi qadam</span>
-              <h3>{answerPercent < 70 ? "Savollar qamrovini oshirish" : "Test barqarorligini oshirish"}</h3>
-              <p>
-                {answerPercent < 70
-                  ? `${Math.max(totalQuestions - answerTotal, 0)} ta savol hali ishlanmagan. Avval darslar va aralash testlar orqali qamrovni oshiring.`
-                  : "Qamrov yaxshi. Endi shablon testlar va yakuniy imtihon bilan natijani mustahkamlang."}
-              </p>
+              <h3>{nextStepTitle}</h3>
+              <p>{nextStepText}</p>
               <div className="progress-actions">
-                <button onClick={() => setView(answerPercent < 70 ? "lessons" : "template-tests")}>
-                  {answerPercent < 70 ? "Darslarni ochish" : "Shablon testlar"}
-                </button>
+                <button onClick={() => setView(primaryActionView)}>{primaryActionLabel}</button>
                 <button className="secondary" onClick={() => setView("random-tests")}>Aralash mashq</button>
               </div>
             </div>
@@ -240,7 +232,7 @@ export function Dashboard({ data, summary, recent, setView }: DashboardProps) {
           <div className="dashboard-panel-head">
             <div>
               <h2>Baholash holati</h2>
-              <p>Tanlangan davrdagi aniqlik va xato ulushi.</p>
+              <p>{range.label} davridagi aniqlik va xato ulushi.</p>
             </div>
           </div>
           <div className="score-status-body">
@@ -305,7 +297,47 @@ export function Dashboard({ data, summary, recent, setView }: DashboardProps) {
               <h2><Activity size={18} /> So'nggi faollik</h2>
               <p>Tanlangan davrdagi oxirgi harakatlar.</p>
             </div>
-            <span className="dashboard-pill">{filteredRecent.length} yozuv</span>
+            <div className="activity-header-actions">
+              <span className="dashboard-pill">{filteredRecent.length} yozuv</span>
+              <div className="date-range-picker">
+                <button className={`date-range-trigger ${filterOpen ? "active" : ""}`} onClick={() => setFilterOpen((open) => !open)}>
+                  <CalendarDays size={17} />
+                  <span>
+                    <small>{range.label}</small>
+                    <strong>{formatRangeLabel(range.start, range.end)}</strong>
+                  </span>
+                  <ChevronDown size={16} />
+                </button>
+                {filterOpen && (
+                  <div className="date-range-popover">
+                    <section>
+                      <h3>Tez tanlash</h3>
+                      <div className="quick-date-grid">
+                        <button onClick={() => applyPreset("today")}>Bugun</button>
+                        <button onClick={() => applyPreset("7")}>7 kun</button>
+                        <button className={range.label === "30 kun" ? "active" : ""} onClick={() => applyPreset("30")}>30 kun</button>
+                        <button onClick={() => applyPreset("month")}>Bu oy</button>
+                        <button onClick={() => applyPreset("year")}>Bu yil</button>
+                      </div>
+                    </section>
+                    <section className="exact-date-section">
+                      <h3>Aniq davr</h3>
+                      <div className="exact-date-grid">
+                        <label>
+                          <span>Dan</span>
+                          <input type="date" value={draftStart || toInputDate(range.start)} onChange={(event) => setDraftStart(event.target.value)} />
+                        </label>
+                        <label>
+                          <span>Gacha</span>
+                          <input type="date" value={draftEnd || toInputDate(range.end)} onChange={(event) => setDraftEnd(event.target.value)} />
+                        </label>
+                      </div>
+                      <button className="apply-date-button" onClick={applyExactRange}>Qo'llash</button>
+                    </section>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           {filteredRecent.length > 0 ? (
             <div className="activity-items-list">

@@ -121,6 +121,14 @@ function getQuestion(id) {
   return siteData.questions.find((question) => Number(question.id) === Number(id));
 }
 
+function normalizeQuestion(question) {
+  return {
+    ...question,
+    image: normalizeAsset(question.image),
+    video: normalizeAsset(question.video),
+  };
+}
+
 function buildTemplates() {
   const maxTemplates = Math.max(62, siteData.tests.length);
   const saved = new Set(db.prepare("SELECT template_id FROM saved_templates").all().map((row) => Number(row.template_id)));
@@ -174,6 +182,30 @@ function filterQuestions(searchParams, sourceQuestions = siteData.questions) {
     if (hasVideo === "false" && question.video) return false;
     return true;
   });
+}
+
+function seededRandom(seed) {
+  let value = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    value = (value * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return () => {
+    value = (value + 0x6d2b79f5) >>> 0;
+    let next = value;
+    next = Math.imul(next ^ (next >>> 15), next | 1);
+    next ^= next + Math.imul(next ^ (next >>> 7), next | 61);
+    return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleQuestions(questions, seed) {
+  const random = seededRandom(seed || new Date().toISOString());
+  const shuffled = [...questions];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
 }
 
 function progressSummary() {
@@ -316,22 +348,21 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && url.pathname === "/api/questions") {
     const page = Math.max(1, Number(url.searchParams.get("page") || 1));
-    const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get("pageSize") || 12)));
+    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize") || 12)));
     const templateId = url.searchParams.get("templateId");
     const template = templateId ? getTemplate(templateId) : null;
     const sourceQuestions = template ? templateQuestionPool(template) : siteData.questions;
-    const filtered = filterQuestions(url.searchParams, sourceQuestions);
+    const filteredSource = filterQuestions(url.searchParams, sourceQuestions);
+    const filtered = url.searchParams.get("random") === "true"
+      ? shuffleQuestions(filteredSource, url.searchParams.get("seed") || "")
+      : filteredSource;
     const start = (page - 1) * pageSize;
     json(res, 200, {
       page,
       pageSize,
       total: filtered.length,
       totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
-      data: filtered.slice(start, start + pageSize).map((question) => ({
-        ...question,
-        image: normalizeAsset(question.image),
-        video: normalizeAsset(question.video),
-      })),
+      data: filtered.slice(start, start + pageSize).map(normalizeQuestion),
     });
     return;
   }
@@ -372,6 +403,43 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && url.pathname === "/api/progress/recent") {
     json(res, 200, recentProgress());
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/questions/saved") {
+    const rows = db.prepare("SELECT question_id, created_at FROM saved_questions ORDER BY created_at DESC").all();
+    const data = rows
+      .map((row) => {
+        const question = getQuestion(row.question_id);
+        return question ? { ...normalizeQuestion(question), savedAt: row.created_at } : null;
+      })
+      .filter(Boolean);
+    json(res, 200, {
+      page: 1,
+      pageSize: data.length,
+      total: data.length,
+      totalPages: 1,
+      data,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/questions/save") {
+    const payload = await readBody(req);
+    const questionId = Number(payload.questionId);
+    if (!questionId || !getQuestion(questionId)) {
+      json(res, 400, { message: "Invalid questionId" });
+      return;
+    }
+    if (payload.saved === false) {
+      db.prepare("DELETE FROM saved_questions WHERE question_id = ?").run(questionId);
+    } else {
+      db.prepare("INSERT OR REPLACE INTO saved_questions (question_id, created_at) VALUES (?, ?)").run(
+        questionId,
+        new Date().toISOString(),
+      );
+    }
+    json(res, 200, { ok: true });
     return;
   }
 

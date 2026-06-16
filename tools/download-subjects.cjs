@@ -22,6 +22,15 @@ function getLocalizedName(value) {
   return value.uz || value.kiril || value.ru || Object.values(value).find(Boolean) || "";
 }
 
+function normalizeContentBlock(block) {
+  const content = getLocalizedName(block.content);
+  return {
+    id: Number(block.id),
+    type: Number(block.type_id || block.type || 0),
+    content,
+  };
+}
+
 async function login(username, password) {
   const formData = new FormData();
   formData.append("username", username);
@@ -44,17 +53,22 @@ async function login(username, password) {
 }
 
 async function getJson(pathname, token) {
-  const response = await fetch(`${api}${pathname}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Accept-Language": "uz",
-    },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || Number(data.status) === 0) {
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    const response = await fetch(`${api}${pathname}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Accept-Language": "uz",
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && Number(data.status) !== 0) return data;
+    if (response.status === 429 && attempt < 6) {
+      await new Promise((resolve) => setTimeout(resolve, attempt * 5000));
+      continue;
+    }
     throw new Error(data.message || `GET ${pathname} failed: ${response.status}`);
   }
-  return data;
+  throw new Error(`GET ${pathname} failed`);
 }
 
 async function fetchLessonTopics(lessonId, token) {
@@ -74,6 +88,12 @@ async function fetchLessonTopics(lessonId, token) {
   }
 
   return topics;
+}
+
+async function fetchTopicContents(topicId, token) {
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  const payload = await getJson(`/student-content/contents?topic_id=${topicId}`, token);
+  return (payload.data || []).map(normalizeContentBlock).filter((block) => block.content);
 }
 
 async function main() {
@@ -101,16 +121,18 @@ async function main() {
       topicCount: lessonTopics.length,
     };
     lessons.push(normalizedLesson);
-    topics.push(
-      ...lessonTopics.map((topic) => ({
+    for (const topic of lessonTopics) {
+      const contents = await fetchTopicContents(topic.id, token);
+      topics.push({
         id: Number(topic.id),
         lessonId: Number(item.id),
         title: getLocalizedName(topic.name),
         type: Number(topic.type || 0),
         questionCount: Number(topic.exam_topics_count || topic.question_count || 0),
         timeLimit: Number(topic.topic_action_limit?.time_limit || 0),
-      })),
-    );
+        contents,
+      });
+    }
     console.log(`${normalizedLesson.id} ${normalizedLesson.shortName}: ${lessonTopics.length} topics`);
   }
 

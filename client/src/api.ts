@@ -12,6 +12,8 @@ export async function getQuestions(params: {
   query?: string;
   hasVideo?: boolean;
   templateId?: number;
+  random?: boolean;
+  seed?: string;
 }): Promise<QuestionResponse> {
   const search = new URLSearchParams({
     page: String(params.page),
@@ -20,9 +22,26 @@ export async function getQuestions(params: {
   if (params.query) search.set("query", params.query);
   if (typeof params.hasVideo === "boolean") search.set("hasVideo", String(params.hasVideo));
   if (params.templateId) search.set("templateId", String(params.templateId));
+  if (params.random) search.set("random", "true");
+  if (params.seed) search.set("seed", params.seed);
   const response = await fetch(`/api/questions?${search}`);
   if (!response.ok) throw new Error("Failed to load questions");
   return response.json();
+}
+
+export async function getSavedQuestions(): Promise<QuestionResponse> {
+  const response = await fetch("/api/questions/saved");
+  if (!response.ok) throw new Error("Failed to load saved questions");
+  return response.json();
+}
+
+export async function saveQuestion(input: { questionId: number; saved: boolean }) {
+  const response = await fetch("/api/questions/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error("Failed to save question");
 }
 
 export async function saveQuestionProgress(input: {
