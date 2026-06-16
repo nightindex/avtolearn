@@ -13,31 +13,40 @@ import {
   ChevronDown,
   ClipboardList,
   Download,
+  Eye,
+  EyeOff,
   Expand,
   FileText,
   Flag,
   Gauge,
+  Globe,
   GraduationCap,
   Hand,
   Home,
-  Languages,
   LayoutDashboard,
   Lightbulb,
   ListChecks,
+  Lock,
+  LogOut,
+  Mail,
   Menu,
   MessageCircle,
+  PanelLeft,
+  Paperclip,
   Moon,
   Plus,
   PlayCircle,
   RefreshCcw,
   Save,
   Search,
+  SendHorizontal,
   ShieldAlert,
   Scale,
   Sparkles,
+  Sun,
   Timer,
   Trophy,
-  UserRound,
+  Trash2,
   Video,
   Volume2,
   WalletCards,
@@ -61,7 +70,8 @@ type View =
   | "all-tests"
   | "saved-tests"
   | "final-exam"
-  | "ai";
+  | "ai"
+  | "profile";
 
 const navGroups = [
   {
@@ -87,7 +97,7 @@ const navGroups = [
   {
     title: "Natijalar",
     items: [
-      { id: "group", label: "Guruh", icon: UserRound },
+      { id: "group", label: "Rayting", icon: Trophy },
       { id: "appeals", label: "Murojaat", icon: FileText },
     ],
   },
@@ -114,14 +124,327 @@ const viewTitles: Record<View, string> = {
   penalties: "Jarimalar",
   appeals: "Murojaatlar",
   autodrome: "Avtodrom qo'llanmasi",
-  group: "Guruh tafsilotlari",
+  group: "Rayting",
   "template-tests": "Shablon testlar",
   "random-tests": "Aralash testlar",
   "all-tests": "Barcha testlar",
   "saved-tests": "Saqlangan testlar",
   "final-exam": "Yakuniy imtihon",
   ai: "AI Tutor",
+  profile: "Profil",
 };
+
+type AppLanguage = "uz" | "uz-cyrl" | "ru";
+
+const languages: { id: AppLanguage; short: string; label: string }[] = [
+  { id: "uz", short: "UZ", label: "O'zbek" },
+  { id: "uz-cyrl", short: "Ўз", label: "Ўзбек" },
+  { id: "ru", short: "RU", label: "Русский" },
+];
+
+const languageDescriptions: Record<AppLanguage, string> = {
+  uz: "Lotin",
+  "uz-cyrl": "Кирилл",
+  ru: "Рус",
+};
+
+const profileUser = {
+  name: "I.MUXTOROV",
+  initials: "I",
+  role: "Administrator",
+  status: "Faol",
+  email: "i.muxtorov@avtolearn.uz",
+};
+
+const AUTH_STORAGE_KEY = "avtolearn-authenticated";
+const DEMO_EMAIL = profileUser.email;
+const DEMO_PASSWORD = "avtolearn2026";
+
+const ruDictionary: Record<string, string> = {
+  "O'qish": "Обучение",
+  "Testlar": "Тесты",
+  "Natijalar": "Результаты",
+  "Bosh sahifa": "Главная",
+  "Darslar": "Уроки",
+  "Yo'l belgilari": "Дорожные знаки",
+  "Jarimalar": "Штрафы",
+  "Avtodrom": "Автодром",
+  "Shablon testlar": "Тесты по шаблонам",
+  "Aralash testlar": "Смешанные тесты",
+  "Barcha testlar": "Все тесты",
+  "Saqlangan": "Сохраненные",
+  "Saqlangan testlar": "Сохраненные тесты",
+  "Yakuniy imtihon": "Итоговый экзамен",
+  "Rayting": "Рейтинг",
+  "Murojaat": "Обращение",
+  "Murojaatlar": "Обращения",
+  "Avtodrom qo'llanmasi": "Руководство по автодрому",
+  "Online": "Онлайн",
+  "Qidiruv...": "Поиск...",
+  "Natija topilmadi": "Ничего не найдено",
+  "Kunduzgi rejim": "Светлая тема",
+  "Tungi rejim": "Темная тема",
+  "Bildirishnoma": "Уведомления",
+  "Imtihon rejimi": "Режим экзамена",
+  "Davom ettirish": "Продолжить",
+  "Boshlash uchun shablon tanlang": "Выберите шаблон для старта",
+  "shablon": "шаблон",
+  "daqiqa": "минут",
+  "savol": "вопросов",
+  "eng yaxshi": "лучший",
+  "yakunlangan": "завершено",
+  "Qidirish": "Поиск",
+  "Holat": "Статус",
+  "Saralash": "Сортировка",
+  "Barchasi": "Все",
+  "Yakunlangan": "Завершенные",
+  "Boshlanmagan": "Не начатые",
+  "Zaif natija": "Слабый результат",
+  "Yangi": "Новый",
+  "Zaif": "Слабый",
+  "Boshlash": "Начать",
+  "Yana ko'rsatish": "Показать еще",
+  "Imtihonga tayyorlanish": "Подготовка к экзамену",
+  "Til": "Язык",
+  "O'zbek": "Узбекский",
+  "Кирилл": "Кириллица",
+  "Рус": "Русский",
+  "Bekor qilish": "Отмена",
+  "Imtihonni boshlash": "Начать экзамен",
+  "Test markazi": "Центр тестов",
+  "Adaptive practice": "Адаптивная практика",
+  "Tezkor mashq": "Быстрая тренировка",
+  "Chuqur mashq": "Глубокая тренировка",
+  "Marafon": "Марафон",
+  "Tayyorlik": "Готовность",
+  "To'g'ri javoblar": "Правильные ответы",
+  "Noto'g'ri javoblar": "Неправильные ответы",
+  "Jami ishlangan testlar": "Всего выполнено тестов",
+  "Jami savollar": "Всего вопросов",
+  "Tanlangan vaqt": "Выбранное время",
+  "Aniqlik": "Точность",
+  "Yaratilgan vaqt": "Время создания",
+  "Yangilangan vaqt": "Время обновления",
+  "Test sozlamasi": "Настройки теста",
+  "Tezkor": "Быстрый",
+  "Standart": "Стандарт",
+  "Yangi test boshlash": "Начать новый тест",
+  "ta savol": "вопросов",
+  "sahifa": "страница",
+  "ko'rildi": "просмотрено",
+  "Faqat video": "Только видео",
+  "AI izoh": "AI пояснение",
+  "Saqlash": "Сохранить",
+  "Vizual materiallar": "Визуальные материалы",
+  "Rasm": "Изображение",
+  "Video": "Видео",
+  "Javob variantlari": "Варианты ответов",
+  "Video javob": "Видеоответ",
+  "Avval javobni tanlang, keyin video izoh ochiladi.": "Сначала выберите ответ, затем откроется видеообъяснение.",
+  "Exam center": "Экзаменационный центр",
+  "O'qishni davom ettiring": "Продолжайте обучение",
+  "Keyingi qadam": "Следующий шаг",
+  "Savol qamrovi": "Охват вопросов",
+  "O'rtacha aniqlik": "Средняя точность",
+  "Test urinishlari": "Попытки тестов",
+  "Eng yaxshi natija": "Лучший результат",
+  "O'quv progressi": "Учебный прогресс",
+  "Qamrov": "Охват",
+  "Javoblar": "Ответы",
+  "Profil": "Профиль",
+  "Profil va sozlamalar": "Профиль и настройки",
+  "Shaxsiy kabinet, o'quv natijalari va asosiy sozlamalar bir joyda.": "Личный кабинет, учебные результаты и основные настройки в одном месте.",
+  "Hisob ma'lumotlari": "Данные аккаунта",
+  "O'quv ko'rsatkichlari": "Учебные показатели",
+  "Oxirgi faollik": "Последняя активность",
+  "Asosiy bo'limlar": "Основные разделы",
+  "F.I.Sh.": "Ф.И.О.",
+  "Rol": "Роль",
+  "Til rejimi": "Режим языка",
+  "Interfeys": "Интерфейс",
+  "Mahalliy profil": "Локальный профиль",
+  "Administrator": "Администратор",
+  "Faol": "Активен",
+  "Lotin yozuvi": "Латиница",
+  "Kirill yozuvi": "Кириллица",
+  "Tezkor o'tish": "Быстрый переход",
+  "Saqlangan savollar va shablonlarni qayta ko'ring.": "Пересмотрите сохраненные вопросы и шаблоны.",
+  "AI tutor bilan qiyin savollarni tahlil qiling.": "Разберите сложные вопросы с AI tutor.",
+  "Mavzular, testlar va progress bo'yicha umumiy markaz.": "Единый центр по темам, тестам и прогрессу.",
+  "Tungi mavzu yoqilgan": "Темная тема включена",
+  "Kunduzgi mavzu yoqilgan": "Светлая тема включена",
+  "Hozircha faollik qayd etilmagan.": "Активность пока не зафиксирована.",
+  "Hisob": "Аккаунт",
+  "AI yordam": "AI помощь",
+  "Chiqish": "Выйти",
+  "Login sahifasiga qaytish": "Вернуться на страницу входа",
+  "AvtoLearn kabinetiga kirish": "Войти в кабинет AvtoLearn",
+  "Testlar, progress va AI tutor bir joyda.": "Тесты, прогресс и AI tutor в одном месте.",
+  "Email manzil": "Email адрес",
+  "Parol": "Пароль",
+  "Parolni ko'rsatish": "Показать пароль",
+  "Parolni yashirish": "Скрыть пароль",
+  "Eslab qolish": "Запомнить меня",
+  "Kirish": "Войти",
+  "Kirish tekshirilmoqda...": "Проверка входа...",
+  "Demo kirish": "Демо вход",
+  "Email va parolni kiriting.": "Введите email и пароль.",
+  "Email formati noto'g'ri.": "Неверный формат email.",
+  "Demo email yoki parol noto'g'ri.": "Неверный demo email или пароль.",
+  "O'quv platformasi": "Учебная платформа",
+  "Mahalliy demo": "Локальное demo",
+  "Bugungi mashg'ulotga tayyormisiz?": "Готовы к сегодняшней тренировке?",
+  "Shaxsiy progress, saqlangan testlar va AI yordamchi bilan tezkor kirish.": "Быстрый доступ к личному прогрессу, сохраненным тестам и AI помощнику.",
+  "Savollar bazasi": "База вопросов",
+  "AI izohlar": "AI пояснения",
+};
+
+const cyrillicDictionary: Record<string, string> = {
+  "O'qish": "Ўқиш",
+  "Yo'l belgilari": "Йўл белгилари",
+  "AI Tutor": "AI Tutor",
+  "Online": "Онлайн",
+  "UZ": "UZ",
+  "RU": "RU",
+};
+
+const cyrillicPairs: [string, string][] = [
+  ["O'", "Ў"],
+  ["G'", "Ғ"],
+  ["Sh", "Ш"],
+  ["Ch", "Ч"],
+  ["Yo", "Йў"],
+  ["Yu", "Ю"],
+  ["Ya", "Я"],
+  ["Ye", "Е"],
+  ["o'", "ў"],
+  ["g'", "ғ"],
+  ["sh", "ш"],
+  ["ch", "ч"],
+  ["yo", "йў"],
+  ["yu", "ю"],
+  ["ya", "я"],
+  ["ye", "е"],
+  ["A", "А"],
+  ["B", "Б"],
+  ["D", "Д"],
+  ["E", "Э"],
+  ["F", "Ф"],
+  ["G", "Г"],
+  ["H", "Ҳ"],
+  ["I", "И"],
+  ["J", "Ж"],
+  ["K", "К"],
+  ["L", "Л"],
+  ["M", "М"],
+  ["N", "Н"],
+  ["O", "О"],
+  ["P", "П"],
+  ["Q", "Қ"],
+  ["R", "Р"],
+  ["S", "С"],
+  ["T", "Т"],
+  ["U", "У"],
+  ["V", "В"],
+  ["X", "Х"],
+  ["Y", "Й"],
+  ["Z", "З"],
+  ["a", "а"],
+  ["b", "б"],
+  ["d", "д"],
+  ["e", "е"],
+  ["f", "ф"],
+  ["g", "г"],
+  ["h", "ҳ"],
+  ["i", "и"],
+  ["j", "ж"],
+  ["k", "к"],
+  ["l", "л"],
+  ["m", "м"],
+  ["n", "н"],
+  ["o", "о"],
+  ["p", "п"],
+  ["q", "қ"],
+  ["r", "р"],
+  ["s", "с"],
+  ["t", "т"],
+  ["u", "у"],
+  ["v", "в"],
+  ["x", "х"],
+  ["y", "й"],
+  ["z", "з"],
+];
+
+function toUzbekCyrillic(value: string) {
+  let output = value;
+  for (const [latin, cyrillic] of cyrillicPairs) {
+    output = output.replaceAll(latin, cyrillic);
+  }
+  return output;
+}
+
+function translateUi(value: string, language: AppLanguage) {
+  if (language === "uz") return value;
+  const leading = value.match(/^\s*/)?.[0] ?? "";
+  const trailing = value.match(/\s*$/)?.[0] ?? "";
+  const core = value.trim();
+  if (!core) return value;
+  if (language === "ru") return `${leading}${ruDictionary[core] ?? core}${trailing}`;
+  return `${leading}${cyrillicDictionary[core] ?? toUzbekCyrillic(core)}${trailing}`;
+}
+
+function getStoredLanguage(): AppLanguage {
+  const stored = localStorage.getItem("language");
+  return languages.some((item) => item.id === stored) ? (stored as AppLanguage) : "uz";
+}
+
+function shouldTranslateNode(node: Node) {
+  const parent = node.parentElement;
+  if (!parent) return false;
+  return !parent.closest("script, style, svg, kbd, code, pre, .brand, .profile, [data-no-translate]");
+}
+
+function useUiLanguageEffect(language: AppLanguage) {
+  const originalsRef = useRef(new WeakMap<Text, string>());
+
+  useEffect(() => {
+    const root = document.querySelector(".app");
+    if (!root) return;
+
+    const translateRoot = () => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const textNodes: Text[] = [];
+      while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+
+      for (const node of textNodes) {
+        if (!shouldTranslateNode(node)) continue;
+        if (!originalsRef.current.has(node)) originalsRef.current.set(node, node.nodeValue ?? "");
+        const original = originalsRef.current.get(node) ?? "";
+        const next = translateUi(original, language);
+        if (node.nodeValue !== next) node.nodeValue = next;
+      }
+
+      root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[placeholder]").forEach((element) => {
+        if (!element.dataset.originalPlaceholder) {
+          element.dataset.originalPlaceholder = element.getAttribute("placeholder") ?? "";
+        }
+        element.setAttribute("placeholder", translateUi(element.dataset.originalPlaceholder, language));
+      });
+
+      root.querySelectorAll<HTMLElement>("[title]").forEach((element) => {
+        if (!element.dataset.originalTitle) {
+          element.dataset.originalTitle = element.getAttribute("title") ?? "";
+        }
+        element.setAttribute("title", translateUi(element.dataset.originalTitle, language));
+      });
+    };
+
+    translateRoot();
+    const observer = new MutationObserver(() => window.requestAnimationFrame(translateRoot));
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, [language]);
+}
 
 function asset(path: string) {
   return path ? `/${path}`.replaceAll("//", "/") : "";
@@ -191,10 +514,13 @@ function uniquePreviewImages(sign: RoadSignItem) {
 }
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem(AUTH_STORAGE_KEY) === "true");
   const [data, setData] = useState<AppData | null>(null);
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
   const [recent, setRecent] = useState<RecentProgressItem[]>([]);
   const [view, setView] = useState<View>("home");
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
+  const [language, setLanguage] = useState<AppLanguage>(getStoredLanguage);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [questionForTutor, setQuestionForTutor] = useState<Question | null>(null);
@@ -204,9 +530,22 @@ function App() {
   const [activeFinalExam, setActiveFinalExam] = useState<RandomTestConfig | null>(null);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     getData().then(setData).catch(console.error);
     refreshProgress();
-  }, []);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    localStorage.setItem("theme", darkMode ? "dark" : "light");
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+  }, [darkMode]);
+
+  useEffect(() => {
+    localStorage.setItem("language", language);
+    document.documentElement.lang = language === "ru" ? "ru" : language === "uz-cyrl" ? "uz-Cyrl" : "uz-Latn";
+  }, [language]);
+
+  useUiLanguageEffect(language);
 
   const navigateTo = useCallback((next: View) => {
     setView(next);
@@ -222,6 +561,36 @@ function App() {
     getRecentProgress().then(setRecent).catch(console.error);
   }
 
+  const completeLogin = () => {
+    localStorage.setItem(AUTH_STORAGE_KEY, "true");
+    setIsAuthenticated(true);
+    setView("home");
+  };
+
+  const logout = () => {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    setIsAuthenticated(false);
+    setTutorOpen(false);
+    setQuestionForTutor(null);
+    setActiveTemplate(null);
+    setActiveRandomTest(null);
+    setActiveFinalExam(null);
+    setSidebarOpen(false);
+    setGlobalSearch("");
+    setView("home");
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <LoginPage
+        darkMode={darkMode}
+        language={language}
+        onLogin={completeLogin}
+        toggleTheme={() => setDarkMode((value) => !value)}
+      />
+    );
+  }
+
   if (!data) {
     return <div className="loading">Avtolearn AI Studio yuklanmoqda...</div>;
   }
@@ -233,6 +602,19 @@ function App() {
 
   const renderView = () => {
     if (view === "home") return <Dashboard data={data} summary={summary} recent={recent} setView={setView} />;
+    if (view === "profile") {
+      return (
+        <ProfilePage
+          data={data}
+          summary={summary}
+          recent={recent}
+          darkMode={darkMode}
+          language={language}
+          openTutor={() => setTutorOpen(true)}
+          setView={navigateTo}
+        />
+      );
+    }
     if (view === "lessons") return <Lessons data={data} />;
     if (view === "road-signs") return <RoadSigns data={data} />;
     if (view === "penalties") return <PenaltiesPage data={data} />;
@@ -284,14 +666,16 @@ function App() {
     if (["all-tests"].includes(view)) {
       return <QuestionStudio mode={view} onProgress={refreshProgress} onAskTutor={(q) => { setQuestionForTutor(q); setTutorOpen(true); }} />;
     }
+    if (view === "group") return <RatingPage data={data} summary={summary} recent={recent} />;
+    if (view === "appeals") return <AppealsPage summary={summary} recent={recent} />;
     if (view === "autodrome") return <AutodromePage />;
     if (view === "ai") return <AiPanel question={questionForTutor} embedded />;
     return <OperationalPage view={view} data={data} />;
   };
 
   return (
-    <div className={`app ${isExamFocus ? "exam-focus-app" : ""}`}>
-      {!isExamFocus && <Sidebar view={view} setView={navigateTo} open={sidebarOpen} />}
+    <div className={`app ${darkMode ? "theme-dark" : "theme-light"} ${isExamFocus ? "exam-focus-app" : ""}`}>
+      {!isExamFocus && <Sidebar view={view} setView={navigateTo} open={sidebarOpen} language={language} />}
       <main className="main">
         {!isExamFocus && (
           <Topbar
@@ -300,15 +684,20 @@ function App() {
             toggleSidebar={() => setSidebarOpen(true)}
             openTutor={() => setTutorOpen(true)}
             setView={navigateTo}
+            darkMode={darkMode}
+            toggleTheme={() => setDarkMode((value) => !value)}
+            language={language}
+            setLanguage={setLanguage}
+            onLogout={logout}
           />
         )}
         <section className="content">{renderView()}</section>
       </main>
-      {!isExamFocus && <button className="chat-fab" onClick={() => setTutorOpen(true)} aria-label="AI tutor">
-        <MessageCircle size={22} />
+      {!isExamFocus && <button className={`chat-fab ${tutorOpen ? "active" : ""}`} onClick={() => setTutorOpen((open) => !open)} aria-label="AI tutor" aria-expanded={tutorOpen}>
+        {tutorOpen ? <X size={22} /> : <MessageCircle size={22} />}
       </button>}
       {tutorOpen && (
-        <div className="drawer">
+        <div className="drawer widget-drawer">
           <AiPanel question={questionForTutor} onClose={() => setTutorOpen(false)} />
         </div>
       )}
@@ -322,10 +711,12 @@ function Sidebar({
   view,
   setView,
   open,
+  language,
 }: {
   view: View;
   setView: (view: View) => void;
   open: boolean;
+  language: AppLanguage;
 }) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
@@ -344,7 +735,7 @@ function Sidebar({
         <span className="nav-icon">
           <Icon size={18} />
         </span>
-        <span>{item.label}</span>
+        <span>{translateUi(item.label, language)}</span>
       </button>
     );
   };
@@ -366,7 +757,7 @@ function Sidebar({
             onClick={() => toggleGroup(group.title)}
             aria-expanded={!collapsedGroups[group.title]}
           >
-            <span>{group.title}</span>
+            <span>{translateUi(group.title, language)}</span>
             <ChevronDown size={13} />
           </button>
           <nav>{group.items.map(navButton)}</nav>
@@ -382,15 +773,38 @@ function Topbar({
   toggleSidebar,
   openTutor,
   setView,
+  darkMode,
+  toggleTheme,
+  language,
+  setLanguage,
+  onLogout,
 }: {
   search: string;
   setSearch: (value: string) => void;
   toggleSidebar: () => void;
   openTutor: () => void;
   setView: (view: View) => void;
+  darkMode: boolean;
+  toggleTheme: () => void;
+  language: AppLanguage;
+  setLanguage: (language: AppLanguage) => void;
+  onLogout: () => void;
 }) {
   const searchRef = useRef<HTMLDivElement>(null);
+  const languageRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
+  const activeLanguage = languages.find((item) => item.id === language) ?? languages[0];
+  const notifications = [
+    { title: "Yangi testlar tayyor", detail: "Aralash testlar bo'limida yangi savollar mavjud." },
+    { title: "Progress yangilandi", detail: "Oxirgi urinish natijalari statistikaga qo'shildi." },
+    { title: "AI tutor faol", detail: "Qiyin savollar uchun izohlarni ochib ko'rishingiz mumkin." },
+  ];
 
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -398,13 +812,15 @@ function Topbar({
     const matches: { id: string; label: string; group: string; icon: typeof Home }[] = [];
     for (const group of navGroups) {
       for (const item of group.items) {
-        if (item.label.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)) {
-          matches.push({ id: item.id, label: item.label, group: group.title, icon: item.icon });
+        const label = translateUi(item.label, language);
+        const groupLabel = translateUi(group.title, language);
+        if (item.label.toLowerCase().includes(q) || label.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)) {
+          matches.push({ id: item.id, label, group: groupLabel, icon: item.icon });
         }
       }
     }
     return matches;
-  }, [search]);
+  }, [language, search]);
 
   const showDropdown = focused && search.trim().length > 0;
 
@@ -431,6 +847,58 @@ function Topbar({
     return () => document.removeEventListener("mousedown", onClick);
   }, [showDropdown]);
 
+  useEffect(() => {
+    if (!languageOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (languageRef.current && !languageRef.current.contains(e.target as Node)) {
+        setLanguageOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [languageOpen]);
+
+  useEffect(() => {
+    if (!notificationOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
+        setNotificationOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [notificationOpen]);
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [profileOpen]);
+
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+    await document.documentElement.requestFullscreen();
+  };
+
+  const openProfileView = () => {
+    setProfileOpen(false);
+    setView("profile");
+  };
+
   return (
     <header className="topbar">
       <button className="icon-button mobile-only" onClick={toggleSidebar}>
@@ -443,7 +911,7 @@ function Topbar({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onFocus={() => setFocused(true)}
-            placeholder="Qidiruv..."
+            placeholder={translateUi("Qidiruv...", language)}
           />
           <kbd>Ctrl K</kbd>
         </label>
@@ -468,35 +936,322 @@ function Topbar({
                 );
               })
             ) : (
-              <div className="search-no-results">Natija topilmadi</div>
+              <div className="search-no-results">{translateUi("Natija topilmadi", language)}</div>
             )}
           </div>
         )}
       </div>
       <div className="topbar-actions">
-        <button className="chip status-chip">Online</button>
-        <button className="icon-button" title="Tungi rejim">
-          <Moon size={18} />
+        <button className="chip status-chip">{translateUi("Online", language)}</button>
+        <button
+          className={`icon-button theme-toggle ${darkMode ? "active" : ""}`}
+          onClick={toggleTheme}
+          title={translateUi(darkMode ? "Kunduzgi rejim" : "Tungi rejim", language)}
+          type="button"
+          aria-pressed={darkMode}
+        >
+          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
         </button>
-        <button className="language">
-          <Languages size={17} /> UZ
-        </button>
-        <button className="icon-button" title="Fullscreen">
+        <div className="language-menu" data-no-translate ref={languageRef}>
+          <button
+            aria-expanded={languageOpen}
+            aria-haspopup="menu"
+            className={`language ${languageOpen ? "open" : ""}`}
+            onClick={() => setLanguageOpen((open) => !open)}
+            type="button"
+          >
+            <span className="language-leading">
+              <Globe size={15} />
+              <strong>{activeLanguage.short}</strong>
+            </span>
+            <ChevronDown className="language-chevron" size={14} />
+          </button>
+          {languageOpen && (
+            <div className="language-options" role="menu">
+              {languages.map((item) => (
+                <button
+                  className={item.id === language ? "active" : ""}
+                  key={item.id}
+                  onClick={() => {
+                    setLanguage(item.id);
+                    setLanguageOpen(false);
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  <span>{item.short}</span>
+                  <div className="language-option-copy">
+                    <strong>{item.label}</strong>
+                    <small>{languageDescriptions[item.id]}</small>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <button
+          aria-pressed={isFullscreen}
+          className={`icon-button topbar-tool ${isFullscreen ? "active" : ""}`}
+          onClick={() => void toggleFullscreen()}
+          title="Fullscreen"
+          type="button"
+        >
           <Expand size={18} />
         </button>
-        <button className="icon-button" title="Bildirishnoma">
-          <Bell size={18} />
-        </button>
-        <button className="profile">
-          <span className="avatar">I</span>
-          <span>I.MUXTOROV</span>
-          <ChevronDown size={15} />
-        </button>
+        <div className="topbar-menu" ref={notificationRef}>
+          <button
+            aria-expanded={notificationOpen}
+            aria-haspopup="menu"
+            className={`icon-button topbar-tool ${notificationOpen ? "active" : ""}`}
+            onClick={() => setNotificationOpen((open) => !open)}
+            title={translateUi("Bildirishnoma", language)}
+            type="button"
+          >
+            <Bell size={18} />
+          </button>
+          {notificationOpen && (
+            <div className="topbar-dropdown notification-dropdown" role="menu">
+              <div className="topbar-dropdown-head">
+                <strong>{translateUi("Bildirishnoma", language)}</strong>
+                <small>{notifications.length}</small>
+              </div>
+              <div className="notification-list">
+                {notifications.map((item) => (
+                  <button className="notification-item" key={item.title} type="button">
+                    <strong>{translateUi(item.title, language)}</strong>
+                    <span>{translateUi(item.detail, language)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="topbar-menu" ref={profileRef}>
+          <button
+            aria-expanded={profileOpen}
+            aria-haspopup="menu"
+            className={`profile ${profileOpen ? "active" : ""}`}
+            onClick={() => setProfileOpen((open) => !open)}
+            type="button"
+          >
+            <span className="avatar">{profileUser.initials}</span>
+            <span className="profile-trigger-name">{profileUser.name}</span>
+            <ChevronDown className="profile-trigger-chevron" size={15} />
+          </button>
+          {profileOpen && (
+            <div className="topbar-dropdown profile-dropdown" role="menu">
+              <div className="profile-dropdown-summary">
+                <span className="profile-dropdown-avatar">{profileUser.initials}</span>
+                <div>
+                  <strong>{profileUser.name}</strong>
+                  <span>{translateUi(profileUser.role, language)}</span>
+                  <small>{profileUser.email}</small>
+                </div>
+              </div>
+              <div className="profile-dropdown-meta">
+                <span>{translateUi(profileUser.status, language)}</span>
+                <span>{activeLanguage.short}</span>
+              </div>
+              <div className="profile-dropdown-actions">
+                <button className="profile-menu-button primary" onClick={openProfileView} type="button">
+                  <span className="profile-menu-copy">
+                    <strong>{translateUi("Hisob", language)}</strong>
+                    <small>{translateUi("Profil va sozlamalar", language)}</small>
+                  </span>
+                  <ArrowRight size={14} />
+                </button>
+                <button className="profile-menu-button" onClick={() => { setProfileOpen(false); setView("saved-tests"); }} type="button">
+                  <span className="profile-menu-copy">
+                    <strong>{translateUi("Saqlangan testlar", language)}</strong>
+                    <small>{translateUi("Saqlangan savollar va shablonlarni qayta ko'ring.", language)}</small>
+                  </span>
+                  <ArrowRight size={14} />
+                </button>
+                <button className="profile-menu-button" onClick={() => { setProfileOpen(false); openTutor(); }} type="button">
+                  <span className="profile-menu-copy">
+                    <strong>{translateUi("AI yordam", language)}</strong>
+                    <small>{translateUi("AI tutor bilan qiyin savollarni tahlil qiling.", language)}</small>
+                  </span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+              <div className="profile-dropdown-footer">
+                <button className="profile-menu-button logout" onClick={() => { setProfileOpen(false); onLogout(); }} type="button">
+                  <span className="profile-menu-copy">
+                    <strong>{translateUi("Chiqish", language)}</strong>
+                    <small>{translateUi("Login sahifasiga qaytish", language)}</small>
+                  </span>
+                  <LogOut size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         <button className="ai-button" onClick={openTutor}>
           <Bot size={18} /> AI
         </button>
       </div>
     </header>
+  );
+}
+
+function LoginPage({
+  darkMode,
+  language,
+  onLogin,
+  toggleTheme,
+}: {
+  darkMode: boolean;
+  language: AppLanguage;
+  onLogin: () => void;
+  toggleTheme: () => void;
+}) {
+  const [email, setEmail] = useState(DEMO_EMAIL);
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const canSubmit = email.trim().length > 0 && password.trim().length > 0 && !loading;
+
+  const submitLogin = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      setError(translateUi("Email va parolni kiriting.", language));
+      return;
+    }
+    if (!emailValid) {
+      setError(translateUi("Email formati noto'g'ri.", language));
+      return;
+    }
+    if (email.trim().toLowerCase() !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
+      setError(translateUi("Demo email yoki parol noto'g'ri.", language));
+      return;
+    }
+    setError("");
+    setLoading(true);
+    window.setTimeout(() => {
+      localStorage.setItem("avtolearn-remember-login", remember ? "true" : "false");
+      setLoading(false);
+      onLogin();
+    }, 360);
+  };
+
+  return (
+    <main className={`login-page ${darkMode ? "theme-dark" : "theme-light"}`}>
+      <section className="login-brand-panel">
+        <div className="login-brand">
+          <img src={LOGO_PATH} alt="AvtoLearn" />
+          <div>
+            <strong>AVTOLEARN</strong>
+            <span>{translateUi("O'quv platformasi", language)}</span>
+          </div>
+        </div>
+        <div className="login-hero-copy">
+          <span>{translateUi("Mahalliy demo", language)}</span>
+          <h1>{translateUi("Bugungi mashg'ulotga tayyormisiz?", language)}</h1>
+          <p>{translateUi("Shaxsiy progress, saqlangan testlar va AI yordamchi bilan tezkor kirish.", language)}</p>
+        </div>
+        <div className="login-feature-grid">
+          <article>
+            <strong>1 000+</strong>
+            <span>{translateUi("Savollar bazasi", language)}</span>
+          </article>
+          <article>
+            <strong>AI</strong>
+            <span>{translateUi("AI izohlar", language)}</span>
+          </article>
+          <article>
+            <strong>24/7</strong>
+            <span>{translateUi("Online", language)}</span>
+          </article>
+        </div>
+      </section>
+
+      <section className="login-card-wrap">
+        <button
+          className={`icon-button login-theme-toggle ${darkMode ? "active" : ""}`}
+          onClick={toggleTheme}
+          title={translateUi(darkMode ? "Kunduzgi rejim" : "Tungi rejim", language)}
+          type="button"
+        >
+          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+
+        <form className="login-card" onSubmit={submitLogin}>
+          <div className="login-card-head">
+            <span className="login-lock"><Lock size={20} /></span>
+            <div>
+              <h2>{translateUi("AvtoLearn kabinetiga kirish", language)}</h2>
+              <p>{translateUi("Testlar, progress va AI tutor bir joyda.", language)}</p>
+            </div>
+          </div>
+
+          <label className="login-field">
+            <span>{translateUi("Email manzil", language)}</span>
+            <div>
+              <Mail size={17} />
+              <input
+                autoComplete="email"
+                inputMode="email"
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setError("");
+                }}
+                placeholder={DEMO_EMAIL}
+                type="email"
+                value={email}
+              />
+            </div>
+          </label>
+
+          <label className="login-field">
+            <span>{translateUi("Parol", language)}</span>
+            <div>
+              <Lock size={17} />
+              <input
+                autoComplete="current-password"
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setError("");
+                }}
+                placeholder={DEMO_PASSWORD}
+                type={showPassword ? "text" : "password"}
+                value={password}
+              />
+              <button
+                aria-label={translateUi(showPassword ? "Parolni yashirish" : "Parolni ko'rsatish", language)}
+                onClick={() => setShowPassword((value) => !value)}
+                type="button"
+              >
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </div>
+          </label>
+
+          <div className="login-options">
+            <label>
+              <input checked={remember} onChange={(event) => setRemember(event.target.checked)} type="checkbox" />
+              <span>{translateUi("Eslab qolish", language)}</span>
+            </label>
+            <span>{translateUi("Demo kirish", language)}</span>
+          </div>
+
+          {error && <p className="login-error">{error}</p>}
+
+          <button className="login-submit" disabled={!canSubmit} type="submit">
+            {loading ? translateUi("Kirish tekshirilmoqda...", language) : translateUi("Kirish", language)}
+          </button>
+
+          <div className="login-demo">
+            <span>{translateUi("Demo kirish", language)}</span>
+            <strong>{DEMO_EMAIL}</strong>
+            <strong>{DEMO_PASSWORD}</strong>
+          </div>
+        </form>
+      </section>
+    </main>
   );
 }
 
@@ -519,6 +1274,154 @@ function PageHeader({
         <p>{subtitle}</p>
       </div>
       {actions && <div className="header-actions">{actions}</div>}
+    </div>
+  );
+}
+
+function ProfilePage({
+  data,
+  summary,
+  recent,
+  darkMode,
+  language,
+  openTutor,
+  setView,
+}: {
+  data: AppData;
+  summary: ProgressSummary | null;
+  recent: RecentProgressItem[];
+  darkMode: boolean;
+  language: AppLanguage;
+  openTutor: () => void;
+  setView: (view: View) => void;
+}) {
+  const accuracy = summary?.accuracy ?? 0;
+  const answered = summary?.answered ?? 0;
+  const attempts = summary?.attempts ?? 0;
+  const saved = summary?.saved ?? 0;
+  const latestItems = recent.slice(0, 4);
+  const languageLabel =
+    language === "uz-cyrl"
+      ? "Kirill yozuvi"
+      : language === "ru"
+        ? "Русский"
+        : "Lotin yozuvi";
+
+  const metrics = [
+    { label: "Javoblar", value: String(answered), tone: "blue" },
+    { label: "Aniqlik", value: `${accuracy}%`, tone: "cyan" },
+    { label: "Test urinishlari", value: String(attempts), tone: "gold" },
+    { label: "Saqlangan", value: String(saved), tone: "rose" },
+  ] as const;
+
+  const sections = [
+    {
+      title: "Bosh sahifa",
+      detail: "Mavzular, testlar va progress bo'yicha umumiy markaz.",
+      action: () => setView("home"),
+    },
+    {
+      title: "Saqlangan testlar",
+      detail: "Saqlangan savollar va shablonlarni qayta ko'ring.",
+      action: () => setView("saved-tests"),
+    },
+    {
+      title: "AI yordam",
+      detail: "AI tutor bilan qiyin savollarni tahlil qiling.",
+      action: openTutor,
+    },
+  ];
+
+  return (
+    <div className="page-shell profile-page">
+      <PageHeader
+        eyebrow={translateUi("Profil", language)}
+        title={translateUi("Profil va sozlamalar", language)}
+        subtitle={translateUi("Shaxsiy kabinet, o'quv natijalari va asosiy sozlamalar bir joyda.", language)}
+        actions={<button className="primary-button" onClick={() => setView("saved-tests")}>{translateUi("Saqlangan testlar", language)}</button>}
+      />
+
+      <section className="profile-overview">
+        <article className="card profile-identity-card">
+          <div className="profile-identity-avatar">{profileUser.initials}</div>
+          <div className="profile-identity-copy">
+            <span>{translateUi("Mahalliy profil", language)}</span>
+            <h2>{profileUser.name}</h2>
+            <p>{profileUser.email}</p>
+            <div className="profile-chip-row">
+              <span>{translateUi(profileUser.role, language)}</span>
+              <span>{translateUi(profileUser.status, language)}</span>
+              <span>{translateUi(languageLabel, language)}</span>
+            </div>
+          </div>
+        </article>
+
+        <article className="profile-score-card">
+          <span>{translateUi("O'quv ko'rsatkichlari", language)}</span>
+          <strong>{accuracy}%</strong>
+          <p>{translateUi(darkMode ? "Tungi mavzu yoqilgan" : "Kunduzgi mavzu yoqilgan", language)}</p>
+          <div className="profile-progress-meta">
+            <div><span>{translateUi("Javoblar", language)}</span><strong>{answered}</strong></div>
+            <div><span>{translateUi("Saqlangan", language)}</span><strong>{saved}</strong></div>
+          </div>
+        </article>
+      </section>
+
+      <section className="profile-metrics-grid">
+        {metrics.map((item) => (
+          <article className={`profile-metric-card ${item.tone}`} key={item.label}>
+            <strong>{item.value}</strong>
+            <span>{translateUi(item.label, language)}</span>
+          </article>
+        ))}
+      </section>
+
+      <section className="profile-layout">
+        <article className="card profile-section">
+          <div className="profile-section-head">
+            <h2>{translateUi("Hisob ma'lumotlari", language)}</h2>
+            <span className="dashboard-pill">{translateUi("Faol", language)}</span>
+          </div>
+          <dl className="profile-details">
+            <div><dt>{translateUi("F.I.Sh.", language)}</dt><dd>{profileUser.name}</dd></div>
+            <div><dt>{translateUi("Rol", language)}</dt><dd>{translateUi(profileUser.role, language)}</dd></div>
+            <div><dt>Email</dt><dd>{profileUser.email}</dd></div>
+            <div><dt>{translateUi("Til rejimi", language)}</dt><dd>{translateUi(languageLabel, language)}</dd></div>
+          </dl>
+        </article>
+
+        <article className="card profile-section">
+          <div className="profile-section-head">
+            <h2>{translateUi("Oxirgi faollik", language)}</h2>
+            <span className="dashboard-pill">{latestItems.length}</span>
+          </div>
+          <div className="profile-activity-list">
+            {latestItems.length ? latestItems.map((item) => (
+              <div className="profile-activity-item" key={`${item.type}-${item.id}-${item.createdAt}`}>
+                <strong>{translateUi(item.title, language)}</strong>
+                <span>{translateUi(item.detail, language)}</span>
+              </div>
+            )) : (
+              <p className="profile-empty">{translateUi("Hozircha faollik qayd etilmagan.", language)}</p>
+            )}
+          </div>
+        </article>
+
+        <article className="card profile-section profile-section-wide">
+          <div className="profile-section-head">
+            <h2>{translateUi("Asosiy bo'limlar", language)}</h2>
+          </div>
+          <div className="profile-link-grid">
+            {sections.map((section) => (
+              <button className="profile-link-card" key={section.title} onClick={section.action} type="button">
+                <strong>{translateUi(section.title, language)}</strong>
+                <span>{translateUi(section.detail, language)}</span>
+                <ArrowRight size={16} />
+              </button>
+            ))}
+          </div>
+        </article>
+      </section>
     </div>
   );
 }
@@ -2973,6 +3876,7 @@ function FinalExamPage({
   const [cameraError, setCameraError] = useState("");
   const [faceVerified, setFaceVerified] = useState(false);
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
+  const [selectedResultIndex, setSelectedResultIndex] = useState(0);
   const answered = summary?.answered ?? 0;
   const attempts = summary?.attempts ?? 0;
   const accuracy = summary?.accuracy ?? 0;
@@ -2992,12 +3896,9 @@ function FinalExamPage({
       return;
     }
     try {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
       setCameraActive(true);
       setFaceVerified(false);
       setCapturedAt(null);
@@ -3031,6 +3932,14 @@ function FinalExamPage({
   }, []);
 
   useEffect(() => {
+    if (!cameraActive || !videoRef.current || !streamRef.current) return;
+    videoRef.current.srcObject = streamRef.current;
+    void videoRef.current.play().catch(() => {
+      setCameraError("Kamera tasvirini ko'rsatib bo'lmadi. Brauzer ruxsatlarini tekshiring.");
+    });
+  }, [cameraActive]);
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Enter" && cameraActive && !faceVerified) {
         event.preventDefault();
@@ -3056,7 +3965,7 @@ function FinalExamPage({
           <header className="final-score-hero">
             <div>
               <span>Oxirgi urinish statistikasi</span>
-              <h2>Guruh: 02F-26 (Yakuniy imtihon)</h2>
+              <h2>Yakuniy imtihon</h2>
             </div>
             <strong>{accuracy || 0}%</strong>
             <small>{correctPreview}/{examTotal} to'g'ri javob</small>
@@ -3110,13 +4019,26 @@ function FinalExamPage({
                 const isCorrect = index < correctPreview;
                 const isWrong = answered > 0 && !isCorrect;
                 return (
-                  <button className={isWrong ? "wrong" : "correct"} key={index} type="button">
+                  <button
+                    aria-pressed={selectedResultIndex === index}
+                    className={`${isWrong ? "wrong" : "correct"} ${selectedResultIndex === index ? "selected" : ""}`}
+                    key={index}
+                    onClick={() => setSelectedResultIndex(index)}
+                    type="button"
+                  >
                     <span>S-{index + 1}</span>
                     {isWrong ? <X size={17} /> : <CheckCircle2 size={17} />}
                   </button>
                 );
               })}
             </div>
+            <p className="final-question-detail">
+              S-{selectedResultIndex + 1}: {answered > 0 && selectedResultIndex >= correctPreview
+                ? "oldingi urinishda noto'g'ri deb belgilangan."
+                : answered > 0
+                  ? "oldingi urinishda to'g'ri deb belgilangan."
+                  : "hali yakuniy urinish natijasi saqlanmagan."}
+            </p>
           </section>
         </article>
 
@@ -3177,6 +4099,273 @@ function FinalExamPage({
   );
 }
 
+function RatingPage({
+  data,
+  summary,
+  recent,
+}: {
+  data: AppData;
+  summary: ProgressSummary | null;
+  recent: RecentProgressItem[];
+}) {
+  const answered = summary?.answered ?? 0;
+  const accuracy = summary?.accuracy ?? 0;
+  const attempts = summary?.attempts ?? 0;
+  const latestScore = summary?.latestAttempt?.total
+    ? Math.round((summary.latestAttempt.score / summary.latestAttempt.total) * 100)
+    : 0;
+  const learnerScore = Math.min(1000, Math.round(accuracy * 5 + attempts * 18 + Math.min(answered, data.counts.questions) * 0.7 + latestScore * 2));
+  const leaderboard = [
+    { name: "I. Muxtorov", score: learnerScore, accuracy, tests: attempts, trend: "+12", current: true },
+    { name: "M. Karimov", score: 912, accuracy: 94, tests: 31, trend: "+8" },
+    { name: "S. Akramova", score: 884, accuracy: 91, tests: 28, trend: "+6" },
+    { name: "A. Jo'rayev", score: 846, accuracy: 88, tests: 25, trend: "+4" },
+    { name: "D. Rasulova", score: 802, accuracy: 84, tests: 21, trend: "+3" },
+  ].sort((left, right) => right.score - left.score);
+  const currentRank = leaderboard.findIndex((item) => item.current) + 1;
+  const recentAttempts = recent.filter((item) => item.type === "attempt").slice(0, 4);
+
+  return (
+    <div className="page-shell rating-page">
+      <PageHeader
+        eyebrow="Natijalar"
+        title="Rayting"
+        subtitle="Eng faol o'quvchilar, test natijalari va shaxsiy o'sish ko'rsatkichlari."
+        actions={<button className="primary-button"><RefreshCcw size={16} /> Yangilash</button>}
+      />
+
+      <section className="rating-hero">
+        <div>
+          <span>Joriy o'rin</span>
+          <h2>{currentRank || leaderboard.length}-o'rin</h2>
+          <p>Rayting aniqlik, test urinishlari, savol qamrovi va oxirgi imtihon natijasidan hisoblanadi.</p>
+        </div>
+        <div className="rating-score-card">
+          <Trophy size={28} />
+          <strong>{learnerScore}</strong>
+          <span>umumiy ball</span>
+        </div>
+      </section>
+
+      <section className="rating-grid">
+        <article className="rating-board">
+          <div className="rating-section-head">
+            <div>
+              <h2>Top o'quvchilar</h2>
+              <p>Bugungi umumiy jadval</p>
+            </div>
+            <span>{leaderboard.length} foydalanuvchi</span>
+          </div>
+          <div className="rating-list">
+            {leaderboard.map((user, index) => (
+              <div className={`rating-row ${user.current ? "current" : ""}`} key={user.name}>
+                <strong className="rating-rank">{index + 1}</strong>
+                <span className="rating-avatar">{user.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>
+                <div>
+                  <h3>{user.name}</h3>
+                  <p>{user.accuracy}% aniqlik · {user.tests} ta test</p>
+                </div>
+                <span className="rating-trend">{user.trend}</span>
+                <strong className="rating-points">{user.score}</strong>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <aside className="rating-side">
+          <article>
+            <span><Award size={18} /> Shaxsiy rekord</span>
+            <strong>{latestScore}%</strong>
+            <p>Oxirgi test natijasi</p>
+          </article>
+          <article>
+            <span><CheckCircle2 size={18} /> Aniqlik</span>
+            <strong>{accuracy}%</strong>
+            <p>{summary?.correct ?? 0}/{answered || 0} to'g'ri javob</p>
+          </article>
+          <article>
+            <span><ClipboardList size={18} /> Faollik</span>
+            <strong>{attempts}</strong>
+            <p>Jami test urinishlari</p>
+          </article>
+        </aside>
+      </section>
+
+      <section className="rating-history">
+        <div className="rating-section-head">
+          <div>
+            <h2>Oxirgi natijalar</h2>
+            <p>Raytingga ta'sir qilgan so'nggi testlar</p>
+          </div>
+        </div>
+        {recentAttempts.length ? recentAttempts.map((item) => (
+          <article key={`${item.type}-${item.id}`}>
+            <span>{new Date(item.createdAt).toLocaleString("uz-UZ", { hour12: false })}</span>
+            <strong>{item.title}</strong>
+            <p>{item.detail}</p>
+          </article>
+        )) : (
+          <div className="empty-state">Hali test urinishlari yo'q.</div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function AppealsPage({
+  summary,
+  recent,
+}: {
+  summary: ProgressSummary | null;
+  recent: RecentProgressItem[];
+}) {
+  const [appealType, setAppealType] = useState("Savol bo'yicha");
+  const [appealTypeOpen, setAppealTypeOpen] = useState(false);
+  const appealTypeRef = useRef<HTMLDivElement | null>(null);
+  const [message, setMessage] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const latestAttempt = summary?.latestAttempt;
+  const appealTypes = ["Savol bo'yicha", "Test natijasi", "Texnik muammo", "Taklif"];
+  const appealRows = [
+    { id: "A-1042", title: "Savol izohi tekshirildi", status: "Yopilgan", date: "2026-06-12" },
+    { id: "A-1041", title: "Video material qayta yuklandi", status: "Jarayonda", date: "2026-06-10" },
+    { id: "A-1038", title: "Yakuniy imtihon natijasi", status: "Ko'rib chiqildi", date: "2026-06-07" },
+  ];
+
+  function submitAppeal(event: React.FormEvent) {
+    event.preventDefault();
+    if (!message.trim()) return;
+    setSubmitted(true);
+    setMessage("");
+  }
+
+  useEffect(() => {
+    if (!appealTypeOpen) return;
+    const onMouseDown = (event: MouseEvent) => {
+      if (appealTypeRef.current && !appealTypeRef.current.contains(event.target as Node)) {
+        setAppealTypeOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAppealTypeOpen(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [appealTypeOpen]);
+
+  return (
+    <div className="page-shell appeals-page">
+      <PageHeader
+        eyebrow="Yordam"
+        title="Murojaat"
+        subtitle="Savol, test natijasi yoki texnik holat bo'yicha murojaat yuboring va holatini kuzating."
+      />
+
+      <section className="appeals-grid">
+        <form className="appeal-form" onSubmit={submitAppeal}>
+          <div className="rating-section-head">
+            <div>
+              <h2>Yangi murojaat</h2>
+              <p>Ma'lumotni aniq yozing, javob tezroq qaytadi.</p>
+            </div>
+            <MessageCircle size={20} />
+          </div>
+          <label>
+            <span>Murojaat turi</span>
+            <div className="appeal-select" ref={appealTypeRef}>
+              <button
+                aria-expanded={appealTypeOpen}
+                className="appeal-select-trigger"
+                onClick={() => setAppealTypeOpen((open) => !open)}
+                type="button"
+              >
+                <span>{appealType}</span>
+                <ChevronDown size={17} />
+              </button>
+              {appealTypeOpen && (
+                <div className="appeal-select-menu" role="listbox">
+                  {appealTypes.map((type) => (
+                    <button
+                      aria-selected={appealType === type}
+                      className={appealType === type ? "active" : ""}
+                      key={type}
+                      onClick={() => {
+                        setAppealType(type);
+                        setAppealTypeOpen(false);
+                      }}
+                      role="option"
+                      type="button"
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </label>
+          <label>
+            <span>Murojaat matni</span>
+            <textarea
+              value={message}
+              onChange={(event) => {
+                setMessage(event.target.value);
+                setSubmitted(false);
+              }}
+              placeholder="Masalan: 12-savolda javob izohi tushunarsiz ko'rinyapti..."
+              rows={7}
+            />
+          </label>
+          <div className="appeal-context">
+            <span>Oxirgi test: {latestAttempt ? `${latestAttempt.score}/${latestAttempt.total}` : "yo'q"}</span>
+            <span>Faollik: {recent.length} yozuv</span>
+          </div>
+          {submitted && <p className="appeal-success">Murojaat qabul qilindi. Operator javobi shu sahifada ko'rinadi.</p>}
+          <button className="primary-button" disabled={!message.trim()} type="submit">
+            <FileText size={16} />
+            Yuborish
+          </button>
+        </form>
+
+        <aside className="appeal-status-panel">
+          <article>
+            <span><Bell size={18} /> Javob muddati</span>
+            <strong>24 soat</strong>
+            <p>O'quv savollari odatda bir ish kuni ichida ko'rib chiqiladi.</p>
+          </article>
+          <article>
+            <span><ShieldAlert size={18} /> Imtihon murojaati</span>
+            <strong>Ustuvor</strong>
+            <p>Yakuniy imtihon natijasi bo'yicha murojaatlar alohida belgilanadi.</p>
+          </article>
+        </aside>
+      </section>
+
+      <section className="appeal-history">
+        <div className="rating-section-head">
+          <div>
+            <h2>Murojaatlar tarixi</h2>
+            <p>So'nggi holatlar va operator javoblari</p>
+          </div>
+        </div>
+        {appealRows.map((row) => (
+          <article key={row.id}>
+            <span>{row.id}</span>
+            <div>
+              <strong>{row.title}</strong>
+              <p>{row.date}</p>
+            </div>
+            <em>{row.status}</em>
+          </article>
+        ))}
+      </section>
+    </div>
+  );
+}
+
 function OperationalPage({ view, data }: { view: View; data: AppData }) {
   const rows = [
     ["Darslar", data.lessons.length],
@@ -3212,22 +4401,93 @@ function OperationalPage({ view, data }: { view: View; data: AppData }) {
   );
 }
 
+type AiMessage = { role: "user" | "assistant"; text: string };
+type AiSession = {
+  id: string;
+  title: string;
+  meta: string;
+  messages: AiMessage[];
+};
+
 function AiPanel({ question, onClose, embedded }: { question: Question | null; onClose?: () => void; embedded?: boolean }) {
-  const [message, setMessage] = useState(question ? "Bu savolni tushuntirib bering" : "");
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
+  const initialMessage = question ? "Bu savolni tushuntirib bering" : "";
+  const [message, setMessage] = useState(initialMessage);
+  const [sessions, setSessions] = useState<AiSession[]>(() => [
+    {
+      id: "current",
+      title: question ? `Savol #${question.id}` : "Yangi suhbat",
+      meta: "hozir",
+      messages: [],
+    },
+    {
+      id: "exam-help",
+      title: "Yakuniy imtihon",
+      meta: "kecha",
+      messages: [
+        { role: "user", text: "Imtihonga tayyorgarlik uchun nimalarga e'tibor berish kerak?" },
+        { role: "assistant", text: "Belgilar, chorraha qoidalari va jarima mavzularini aralash test orqali mustahkamlang." },
+      ],
+    },
+    {
+      id: "signs",
+      title: "Yo'l belgilari",
+      meta: "2 kun oldin",
+      messages: [
+        { role: "user", text: "Ogohlantiruvchi belgilarni qanday tez ajrataman?" },
+        { role: "assistant", text: "Ularning shakli, rangi va joylashuvini birga yodlang: xavf oldidan masofa va vaziyat belgisi muhim." },
+      ],
+    },
+  ]);
+  const [activeSessionId, setActiveSessionId] = useState("current");
   const [loading, setLoading] = useState(false);
+  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
+  const messages = activeSession?.messages ?? [];
+  const suggestions = [
+    "Oxirgi xatolarimni tushuntir",
+    "Yakuniy imtihonga reja tuz",
+    "Yo'l belgilaridan mini test ber",
+  ];
+
+  function updateActiveSession(updater: (session: AiSession) => AiSession) {
+    setSessions((items) => items.map((session) => (session.id === activeSessionId ? updater(session) : session)));
+  }
+
+  function startNewChat() {
+    const id = `chat-${Date.now()}`;
+    setSessions((items) => [
+      {
+        id,
+        title: "Yangi suhbat",
+        meta: "hozir",
+        messages: [],
+      },
+      ...items,
+    ]);
+    setActiveSessionId(id);
+    setMessage("");
+  }
+
+  function clearActiveChat() {
+    updateActiveSession((session) => ({ ...session, messages: [] }));
+    setMessage("");
+  }
 
   async function send() {
     if (!message.trim()) return;
     const current = message;
-    setMessages((items) => [...items, { role: "user", text: current }]);
+    updateActiveSession((session) => ({
+      ...session,
+      title: session.messages.length ? session.title : current.slice(0, 34),
+      meta: "hozir",
+      messages: [...session.messages, { role: "user", text: current }],
+    }));
     setMessage("");
     setLoading(true);
     try {
       const reply = await askTutor({ message: current, questionId: question?.id, mode: "tutor" });
-      setMessages((items) => [...items, { role: "assistant", text: reply.answer }]);
+      updateActiveSession((session) => ({ ...session, messages: [...session.messages, { role: "assistant", text: reply.answer }] }));
     } catch {
-      setMessages((items) => [...items, { role: "assistant", text: "AI tutor hozircha javob bera olmadi." }]);
+      updateActiveSession((session) => ({ ...session, messages: [...session.messages, { role: "assistant", text: "AI tutor hozircha javob bera olmadi." }] }));
     } finally {
       setLoading(false);
     }
@@ -3235,24 +4495,96 @@ function AiPanel({ question, onClose, embedded }: { question: Question | null; o
 
   return (
     <aside className={`ai-panel ${embedded ? "embedded" : ""}`}>
-      <div className="ai-header">
-        <div>
-          <span className="tag"><Sparkles size={13} /> AI Tutor</span>
-          <h2>Mahalliy materiallar bo'yicha yordamchi</h2>
-        </div>
-        {onClose && <button className="icon-button" onClick={onClose}><X size={18} /></button>}
-      </div>
-      {question && <div className="ai-context">Kontekst: #{question.id} {clean(question.title)}</div>}
-      <div className="ai-messages">
-        {messages.length === 0 && <p className="muted">Savol, javob yoki YHQ qoidasi haqida so'rang.</p>}
-        {messages.map((item, index) => (
-          <div key={`${item.role}-${index}`} className={`bubble ${item.role}`}>{item.text}</div>
-        ))}
-        {loading && <div className="bubble assistant">O'ylayapman...</div>}
-      </div>
-      <div className="ai-input">
-        <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="AI tutordan so'rang" />
-        <button className="primary-button" onClick={send}>Yuborish</button>
+      <div className="ai-shell">
+        <aside className="ai-history-panel">
+          <div className="ai-history-top">
+            <span className="ai-brand-mark"><Bot size={18} /></span>
+            <button className="ai-new-chat" onClick={startNewChat} type="button">
+              <Plus size={16} />
+              Yangi suhbat
+            </button>
+          </div>
+          <div className="ai-history-list">
+            {sessions.map((session) => (
+              <button
+                className={session.id === activeSessionId ? "active" : ""}
+                key={session.id}
+                onClick={() => setActiveSessionId(session.id)}
+                type="button"
+              >
+                <MessageCircle size={15} />
+                <span>{session.title}</span>
+                <small>{session.meta}</small>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <section className="ai-chat-area">
+          <header className="ai-header">
+            <div>
+              <span className="tag"><Sparkles size={13} /> AI Tutor</span>
+              <h2>AvtoLearn Copilot</h2>
+            </div>
+            <div className="ai-header-actions">
+              <button className="icon-button" onClick={startNewChat} title="Yangi suhbat" type="button"><Plus size={18} /></button>
+              <button className="icon-button" onClick={clearActiveChat} title="Tozalash" type="button"><Trash2 size={18} /></button>
+              {onClose && <button className="icon-button" onClick={onClose} type="button"><X size={18} /></button>}
+            </div>
+          </header>
+
+          {question && <div className="ai-context"><PanelLeft size={16} /> #{question.id} {clean(question.title)}</div>}
+
+          <div className="ai-messages">
+            {messages.length === 0 && (
+              <div className="ai-welcome">
+                <span><Bot size={26} /></span>
+                <h3>Bugun nimani aniqlashtiramiz?</h3>
+                <div className="ai-suggestions">
+                  {suggestions.map((suggestion) => (
+                    <button key={suggestion} onClick={() => setMessage(suggestion)} type="button">{suggestion}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {messages.map((item, index) => (
+              <div key={`${item.role}-${index}`} className={`ai-message-row ${item.role}`}>
+                <span className="ai-message-avatar">{item.role === "assistant" ? <Bot size={16} /> : "I"}</span>
+                <div className={`bubble ${item.role}`}>
+                  <p>{item.text}</p>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="ai-message-row assistant">
+                <span className="ai-message-avatar"><Bot size={16} /></span>
+                <div className="bubble assistant typing"><span /><span /><span /></div>
+              </div>
+            )}
+          </div>
+
+          <footer className="ai-composer">
+            <div className="ai-input">
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void send();
+                  }
+                }}
+                placeholder="AI tutordan so'rang"
+              />
+              <div className="ai-compose-actions">
+                <button className="icon-button" title="Biriktirish" type="button"><Paperclip size={17} /></button>
+                <button className="ai-send-button" disabled={!message.trim() || loading} onClick={send} type="button">
+                  <SendHorizontal size={18} />
+                </button>
+              </div>
+            </div>
+          </footer>
+        </section>
       </div>
     </aside>
   );
