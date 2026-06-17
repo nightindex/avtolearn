@@ -1,16 +1,13 @@
 import React, { useState } from "react";
-import { Eye, EyeOff, Lock, Mail, ShieldAlert, Sparkles, Sun, Moon } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, ShieldCheck, Sparkles, Sun, Moon } from "lucide-react";
 import { AppLanguage, translateUi } from "../utils/i18n";
 import { LanguageSelector } from "./LanguageSelector";
 
 const LOGO_PATH = "/assets/static/Logo AvtoLearn.svg";
-const DEMO_EMAIL = "i.muxtorov@avtolearn.uz";
-const DEMO_PASSWORD = "avtolearn2026";
-
 interface LoginPageProps {
   darkMode: boolean;
   language: AppLanguage;
-  onLogin: () => void;
+  onLogin: (email: string, password: string) => Promise<void>;
   setLanguage: (language: AppLanguage) => void;
   toggleTheme: () => void;
 }
@@ -22,7 +19,7 @@ export function LoginPage({
   setLanguage,
   toggleTheme,
 }: LoginPageProps) {
-  const [email, setEmail] = useState(DEMO_EMAIL);
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -31,12 +28,6 @@ export function LoginPage({
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const canSubmit = email.trim().length > 0 && password.trim().length > 0 && !loading;
-
-  const handleAutofillDemo = () => {
-    setEmail(DEMO_EMAIL);
-    setPassword(DEMO_PASSWORD);
-    setError("");
-  };
 
   const submitLogin = (event: React.FormEvent) => {
     event.preventDefault();
@@ -48,17 +39,14 @@ export function LoginPage({
       setError(translateUi("Email formati noto'g'ri.", language));
       return;
     }
-    if (email.trim().toLowerCase() !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
-      setError(translateUi("Demo email yoki parol noto'g'ri.", language));
-      return;
-    }
     setError("");
     setLoading(true);
-    window.setTimeout(() => {
+    onLogin(email.trim(), password)
+      .then(() => {
       localStorage.setItem("avtolearn-remember-login", remember ? "true" : "false");
-      setLoading(false);
-      onLogin();
-    }, 360);
+      })
+      .catch(() => setError(translateUi("Email yoki parol noto'g'ri.", language)))
+      .finally(() => setLoading(false));
   };
 
   return (
@@ -72,7 +60,7 @@ export function LoginPage({
           </div>
         </div>
         <div className="login-hero-copy">
-          <span>{translateUi("Mahalliy demo", language)}</span>
+          <span>{translateUi("Raqamli ta'lim portali", language)}</span>
           <h1>{translateUi("Bugungi mashg'ulotga tayyormisiz?", language)}</h1>
           <p>{translateUi("Shaxsiy progress, saqlangan testlar va AI yordamchi bilan tezkor kirish.", language)}</p>
         </div>
@@ -112,19 +100,19 @@ export function LoginPage({
 
         <form className="login-card" onSubmit={submitLogin}>
           <div className="login-card-top">
-            <span>{translateUi("Xavfsiz demo kirish", language)}</span>
+            <span>{translateUi("Xavfsiz kirish", language)}</span>
             <strong>{translateUi("Online", language)}</strong>
           </div>
           <div className="login-card-head">
             <span className="login-lock"><Lock size={20} /></span>
             <div>
-              <h2>{translateUi("AvtoLearn kabinetiga kirish", language)}</h2>
-              <p>{translateUi("Testlar, progress va AI tutor bir joyda.", language)}</p>
+              <h2>{translateUi("Kabinetga kirish", language)}</h2>
+              <p>{translateUi("AvtoLearn platformasiga xavfsiz ulaning.", language)}</p>
             </div>
           </div>
 
           <div className="login-mini-stats" aria-label="Login features">
-            <span><ShieldAlert size={15} /> {translateUi("Demo kirish", language)}</span>
+            <span><ShieldCheck size={15} /> {translateUi("Himoyalangan kirish", language)}</span>
             <span><Sparkles size={15} /> AI Tutor</span>
           </div>
 
@@ -175,7 +163,6 @@ export function LoginPage({
               <input checked={remember} onChange={(event) => setRemember(event.target.checked)} type="checkbox" />
               <span>{translateUi("Eslab qolish", language)}</span>
             </label>
-            <span>{translateUi("Demo kirish", language)}</span>
           </div>
 
           {error && <p className="login-error">{error}</p>}
@@ -183,17 +170,6 @@ export function LoginPage({
           <button className="login-submit" disabled={!canSubmit} type="submit">
             {loading ? translateUi("Kirish tekshirilmoqda...", language) : translateUi("Kirish", language)}
           </button>
-
-          <div
-            className="login-demo"
-            onClick={handleAutofillDemo}
-            style={{ cursor: "pointer" }}
-            title={translateUi("Demo ma'lumotlarini to'ldirish uchun bosing", language)}
-          >
-            <span>{translateUi("Demo kirish", language)} ({translateUi("To'ldirish uchun bosing", language)})</span>
-            <strong>{DEMO_EMAIL}</strong>
-            <strong>{DEMO_PASSWORD}</strong>
-          </div>
         </form>
       </section>
     </main>

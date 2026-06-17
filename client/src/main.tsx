@@ -23,7 +23,6 @@ import {
   GraduationCap,
   Hand,
   Home,
-  LayoutDashboard,
   Lightbulb,
   ListChecks,
   Lock,
@@ -36,6 +35,7 @@ import {
   Moon,
   Plus,
   PlayCircle,
+  ShieldCheck,
   RefreshCcw,
   Save,
   Search,
@@ -52,13 +52,14 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { askTutor, getData, getProgressSummary, getQuestions, getRecentProgress, getSavedQuestions, getTemplates, saveQuestion, saveQuestionProgress, saveTemplate, saveTestAttempt } from "./api";
+import { askTutor, getCurrentUser, getData, getProgressSummary, getQuestions, getRecentProgress, getSavedQuestions, getTemplates, login, logout as logoutApi, saveQuestion, saveQuestionProgress, saveTemplate, saveTestAttempt, type AuthUser } from "./api";
 import type { AppData, Penalty, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate, Topic } from "./types";
 import "./styles.css";
 import { Dashboard } from "./components/Dashboard";
 import { AppLanguage, languages, languageDescriptions, translateUi } from "./utils/i18n";
 import { LoginPage } from "./components/LoginPage";
 import { LanguageSelector } from "./components/LanguageSelector";
+import { AdminShell, canUseAdmin } from "./components/admin/AdminShell";
 
 type View =
   | "home"
@@ -74,7 +75,8 @@ type View =
   | "saved-tests"
   | "final-exam"
   | "ai"
-  | "profile";
+  | "profile"
+  | "admin";
 
 const navGroups = [
   {
@@ -135,6 +137,7 @@ const viewTitles: Record<View, string> = {
   "final-exam": "Yakuniy imtihon",
   ai: "AI Tutor",
   profile: "Profil",
+  admin: "Admin",
 };
 
 // AppLanguage, languages, and languageDescriptions are now imported from ./utils/i18n
@@ -143,7 +146,6 @@ const profileUser = {
   name: "I.MUXTOROV",
   initials: "I",
   role: "Administrator",
-  status: "Faol",
   email: "i.muxtorov@avtolearn.uz",
 };
 
@@ -151,6 +153,34 @@ const AUTH_STORAGE_KEY = "avtolearn-authenticated";
 const DEMO_EMAIL = profileUser.email;
 const DEMO_PASSWORD = "avtolearn2026";
 // Translation utility functions and dictionaries are imported from ./utils/i18n
+
+function roleLabel(user: AuthUser | null) {
+  if (!user) return profileUser.role;
+  if (user.roles.includes("super_admin")) return "Super admin";
+  if (user.roles.includes("admin")) return "Administrator";
+  return "Student";
+}
+
+function userInitials(user: AuthUser | null) {
+  if (!user) return profileUser.initials;
+  return user.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
+}
+
+function workspaceFromPath() {
+  return window.location.pathname === "/admin" ? "admin" : "learner";
+}
+
+function setWorkspacePath(workspace: "admin" | "learner", mode: "push" | "replace" = "push") {
+  const nextPath = workspace === "admin" ? "/admin" : "/learner";
+  if (window.location.pathname === nextPath) return;
+  const method = mode === "replace" ? "replaceState" : "pushState";
+  window.history[method]({ workspace }, "", nextPath);
+}
 
 
 function getStoredLanguage(): AppLanguage {
@@ -274,8 +304,11 @@ function uniquePreviewImages(sign: RoadSignItem) {
 }
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem(AUTH_STORAGE_KEY) === "true");
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [data, setData] = useState<AppData | null>(null);
+  const [dataError, setDataError] = useState("");
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
   const [recent, setRecent] = useState<RecentProgressItem[]>([]);
   const [view, setView] = useState<View>("home");
@@ -290,9 +323,48 @@ function App() {
   const [activeFinalExam, setActiveFinalExam] = useState<RandomTestConfig | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    getData().then(setData).catch(console.error);
+    getCurrentUser()
+      .then((user) => {
+        setCurrentUser(user);
+        setIsAuthenticated(Boolean(user));
+        if (!user) {
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+          return;
+        }
+        if (workspaceFromPath() === "admin" && canUseAdmin(user)) {
+          setView("admin");
+          setWorkspacePath("admin", "replace");
+          return;
+        }
+        setView("home");
+        setWorkspacePath("learner", "replace");
+      })
+      .catch(() => {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+      })
+      .finally(() => setAuthChecked(true));
+  }, []);
+
+  const loadAppData = useCallback(() => {
+    setDataError("");
+    getData()
+      .then((nextData) => {
+        setData(nextData);
+        setDataError("");
+      })
+      .catch((error) => {
+        console.error(error);
+        setData(null);
+        setDataError("Ma'lumotlar serveriga ulanib bo'lmadi. Backend 5180-portda ishlayotganini tekshiring.");
+      });
     refreshProgress();
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    loadAppData();
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -308,28 +380,61 @@ function App() {
   useUiLanguageEffect(language);
 
   const navigateTo = useCallback((next: View) => {
+    if (next === "admin" && !canUseAdmin(currentUser)) {
+      setView("home");
+      setWorkspacePath("learner", "replace");
+      return;
+    }
+    if (next === "admin") setWorkspacePath("admin");
+    else if (view === "admin") setWorkspacePath("learner");
     setView(next);
     if (next !== "template-tests") setActiveTemplate(null);
     if (next !== "random-tests") setActiveRandomTest(null);
     if (next !== "final-exam") setActiveFinalExam(null);
     setSidebarOpen(false);
     setGlobalSearch("");
-  }, []);
+  }, [currentUser, view]);
+
+  useEffect(() => {
+    if (!authChecked || !isAuthenticated) return;
+    const onPopState = () => {
+      if (workspaceFromPath() === "admin") {
+        if (canUseAdmin(currentUser)) {
+          setView("admin");
+          return;
+        }
+        setView("home");
+        setWorkspacePath("learner", "replace");
+        return;
+      }
+      setView((current) => current === "admin" ? "home" : current);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [authChecked, currentUser, isAuthenticated]);
 
   function refreshProgress() {
     getProgressSummary().then(setSummary).catch(console.error);
     getRecentProgress().then(setRecent).catch(console.error);
   }
 
-  const completeLogin = () => {
+  const completeLogin = async (email: string, password: string) => {
+    const user = await login({ email, password });
+    setCurrentUser(user);
     localStorage.setItem(AUTH_STORAGE_KEY, "true");
     setIsAuthenticated(true);
+    setWorkspacePath("learner", "replace");
     setView("home");
   };
 
   const logout = () => {
+    logoutApi().catch(console.error);
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    setCurrentUser(null);
     setIsAuthenticated(false);
+    setData(null);
+    setSummary(null);
+    setRecent([]);
     setTutorOpen(false);
     setQuestionForTutor(null);
     setActiveTemplate(null);
@@ -337,8 +442,13 @@ function App() {
     setActiveFinalExam(null);
     setSidebarOpen(false);
     setGlobalSearch("");
+    setWorkspacePath("learner", "replace");
     setView("home");
   };
+
+  if (!authChecked) {
+    return <div className="loading">Avtolearn AI Studio yuklanmoqda...</div>;
+  }
 
   if (!isAuthenticated) {
     return (
@@ -353,6 +463,23 @@ function App() {
   }
 
   if (!data) {
+    if (dataError) {
+      return (
+        <div className="loading loading-error">
+          <ShieldAlert size={34} />
+          <strong>Avtolearn AI Studio yuklanmadi</strong>
+          <p>{dataError}</p>
+          <div>
+            <button className="primary-button" onClick={loadAppData} type="button">
+              <RefreshCcw size={16} /> Qayta urinish
+            </button>
+            <button className="ghost-button" onClick={logout} type="button">
+              <LogOut size={16} /> Chiqish
+            </button>
+          </div>
+        </div>
+      );
+    }
     return <div className="loading">Avtolearn AI Studio yuklanmoqda...</div>;
   }
 
@@ -360,8 +487,22 @@ function App() {
     (view === "template-tests" && Boolean(activeTemplate)) ||
     (view === "random-tests" && Boolean(activeRandomTest)) ||
     (view === "final-exam" && Boolean(activeFinalExam));
+  const isAdminView = view === "admin";
 
   const renderView = () => {
+    if (view === "admin") {
+      if (!currentUser || !canUseAdmin(currentUser)) return null;
+      return (
+        <AdminShell
+          user={currentUser}
+          onBack={() => {
+            loadAppData();
+            navigateTo("home");
+          }}
+          onCatalogChanged={loadAppData}
+        />
+      );
+    }
     if (view === "home") return <Dashboard data={data} summary={summary} recent={recent} setView={setView} />;
     if (view === "profile") {
       return (
@@ -371,6 +512,7 @@ function App() {
           recent={recent}
           darkMode={darkMode}
           language={language}
+          currentUser={currentUser}
           openTutor={() => setTutorOpen(true)}
           setView={navigateTo}
         />
@@ -435,10 +577,10 @@ function App() {
   };
 
   return (
-    <div className={`app ${darkMode ? "theme-dark" : "theme-light"} ${isExamFocus ? "exam-focus-app" : ""}`}>
-      {!isExamFocus && <Sidebar view={view} setView={navigateTo} open={sidebarOpen} language={language} />}
+    <div className={`app ${darkMode ? "theme-dark" : "theme-light"} ${isExamFocus ? "exam-focus-app" : ""} ${isAdminView ? "admin-app" : ""}`}>
+      {!isExamFocus && !isAdminView && <Sidebar view={view} setView={navigateTo} open={sidebarOpen} language={language} />}
       <main className="main">
-        {!isExamFocus && (
+        {!isExamFocus && !isAdminView && (
           <Topbar
             search={globalSearch}
             setSearch={setGlobalSearch}
@@ -450,14 +592,15 @@ function App() {
             language={language}
             setLanguage={setLanguage}
             onLogout={logout}
+            currentUser={currentUser}
           />
         )}
         <section className="content">{renderView()}</section>
       </main>
-      {!isExamFocus && <button className={`chat-fab ${tutorOpen ? "active" : ""}`} onClick={() => setTutorOpen((open) => !open)} aria-label="AI tutor" aria-expanded={tutorOpen}>
+      {!isExamFocus && !isAdminView && <button className={`chat-fab ${tutorOpen ? "active" : ""}`} onClick={() => setTutorOpen((open) => !open)} aria-label="AI tutor" aria-expanded={tutorOpen}>
         {tutorOpen ? <X size={22} /> : <MessageCircle size={22} />}
       </button>}
-      {tutorOpen && (
+      {tutorOpen && !isAdminView && (
         <div className="drawer widget-drawer">
           <AiPanel question={questionForTutor} onClose={() => setTutorOpen(false)} />
         </div>
@@ -539,6 +682,7 @@ function Topbar({
   language,
   setLanguage,
   onLogout,
+  currentUser,
 }: {
   search: string;
   setSearch: (value: string) => void;
@@ -550,6 +694,7 @@ function Topbar({
   language: AppLanguage;
   setLanguage: (language: AppLanguage) => void;
   onLogout: () => void;
+  currentUser: AuthUser | null;
 }) {
   const searchRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -558,7 +703,6 @@ function Topbar({
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
-  const activeLanguage = languages.find((item) => item.id === language) ?? languages[0];
   const notifications = [
     { title: "Yangi testlar tayyor", detail: "Aralash testlar bo'limida yangi savollar mavjud." },
     { title: "Progress yangilandi", detail: "Oxirgi urinish natijalari statistikaga qo'shildi." },
@@ -648,6 +792,15 @@ function Topbar({
     setProfileOpen(false);
     setView("profile");
   };
+  const displayUser = currentUser
+    ? {
+      name: currentUser.name,
+      email: currentUser.email,
+      role: roleLabel(currentUser),
+      initials: userInitials(currentUser),
+    }
+    : profileUser;
+  const hasAdminAccess = canUseAdmin(currentUser);
 
   return (
     <header className="topbar">
@@ -692,7 +845,12 @@ function Topbar({
         )}
       </div>
       <div className="topbar-actions">
-        <button className="chip status-chip">{translateUi("Online", language)}</button>
+        {hasAdminAccess && (
+          <button className="workspace-switcher" onClick={() => setView("admin")} type="button">
+            <ShieldCheck size={17} />
+            <span>Admin</span>
+          </button>
+        )}
         <button
           className={`icon-button theme-toggle ${darkMode ? "active" : ""}`}
           onClick={toggleTheme}
@@ -752,26 +910,22 @@ function Topbar({
             onClick={() => setProfileOpen((open) => !open)}
             type="button"
           >
-            <span className="avatar">{profileUser.initials}</span>
-            <span className="profile-trigger-name">{profileUser.name}</span>
+            <span className="avatar">{displayUser.initials}</span>
+            <span className="profile-trigger-name">{displayUser.name}</span>
             <ChevronDown className="profile-trigger-chevron" size={15} />
           </button>
           {profileOpen && (
             <div className="topbar-dropdown profile-dropdown" role="menu">
               <div className="profile-dropdown-summary">
-                <span className="profile-dropdown-avatar">{profileUser.initials}</span>
+                <span className="profile-dropdown-avatar">{displayUser.initials}</span>
                 <div>
-                  <strong>{profileUser.name}</strong>
-                  <span>{translateUi(profileUser.role, language)}</span>
-                  <small>{profileUser.email}</small>
+                  <strong>{displayUser.name}</strong>
+                  <span>{translateUi(displayUser.role, language)}</span>
+                  <small>{displayUser.email}</small>
                 </div>
               </div>
-              <div className="profile-dropdown-meta">
-                <span>{translateUi(profileUser.status, language)}</span>
-                <span>{activeLanguage.short}</span>
-              </div>
               <div className="profile-dropdown-actions">
-                <button className="profile-menu-button primary" onClick={openProfileView} type="button">
+                <button className="profile-menu-button" onClick={openProfileView} type="button">
                   <span className="profile-menu-copy">
                     <strong>{translateUi("Hisob", language)}</strong>
                     <small>{translateUi("Profil va sozlamalar", language)}</small>
@@ -844,6 +998,7 @@ function ProfilePage({
   recent,
   darkMode,
   language,
+  currentUser,
   openTutor,
   setView,
 }: {
@@ -852,6 +1007,7 @@ function ProfilePage({
   recent: RecentProgressItem[];
   darkMode: boolean;
   language: AppLanguage;
+  currentUser: AuthUser | null;
   openTutor: () => void;
   setView: (view: View) => void;
 }) {
@@ -860,12 +1016,10 @@ function ProfilePage({
   const attempts = summary?.attempts ?? 0;
   const saved = summary?.saved ?? 0;
   const latestItems = recent.slice(0, 4);
-  const languageLabel =
-    language === "uz-cyrl"
-      ? "Kirill yozuvi"
-      : language === "ru"
-        ? "Русский"
-        : "Lotin yozuvi";
+  const displayName = currentUser?.name || profileUser.name;
+  const displayEmail = currentUser?.email || profileUser.email;
+  const displayRole = roleLabel(currentUser);
+  const displayInitials = userInitials(currentUser);
 
   const metrics = [
     { label: "Javoblar", value: String(answered), tone: "blue" },
@@ -903,15 +1057,13 @@ function ProfilePage({
 
       <section className="profile-overview">
         <article className="card profile-identity-card">
-          <div className="profile-identity-avatar">{profileUser.initials}</div>
+          <div className="profile-identity-avatar">{displayInitials}</div>
           <div className="profile-identity-copy">
-            <span>{translateUi("Mahalliy profil", language)}</span>
-            <h2>{profileUser.name}</h2>
-            <p>{profileUser.email}</p>
+            <span>{translateUi("Profil", language)}</span>
+            <h2>{displayName}</h2>
+            <p>{displayEmail}</p>
             <div className="profile-chip-row">
-              <span>{translateUi(profileUser.role, language)}</span>
-              <span>{translateUi(profileUser.status, language)}</span>
-              <span>{translateUi(languageLabel, language)}</span>
+              <span>{translateUi(displayRole, language)}</span>
             </div>
           </div>
         </article>
@@ -940,13 +1092,11 @@ function ProfilePage({
         <article className="card profile-section">
           <div className="profile-section-head">
             <h2>{translateUi("Hisob ma'lumotlari", language)}</h2>
-            <span className="dashboard-pill">{translateUi("Faol", language)}</span>
           </div>
           <dl className="profile-details">
-            <div><dt>{translateUi("F.I.Sh.", language)}</dt><dd>{profileUser.name}</dd></div>
-            <div><dt>{translateUi("Rol", language)}</dt><dd>{translateUi(profileUser.role, language)}</dd></div>
-            <div><dt>Email</dt><dd>{profileUser.email}</dd></div>
-            <div><dt>{translateUi("Til rejimi", language)}</dt><dd>{translateUi(languageLabel, language)}</dd></div>
+            <div><dt>{translateUi("F.I.Sh.", language)}</dt><dd>{displayName}</dd></div>
+            <div><dt>{translateUi("Rol", language)}</dt><dd>{translateUi(displayRole, language)}</dd></div>
+            <div><dt>Email</dt><dd>{displayEmail}</dd></div>
           </dl>
         </article>
 
@@ -2734,7 +2884,7 @@ function QuestionStudio({
   const [savedQuestionIds, setSavedQuestionIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    const pageSize = mode === "all-tests" && !activeTemplate ? 8 : 1;
+    const pageSize = mode === "all-tests" && !activeTemplate ? 24 : 1;
     getQuestions({ page, pageSize, query, hasVideo: hasVideo || undefined, templateId: activeTemplate?.id }).then(setResult).catch(console.error);
   }, [page, query, hasVideo, activeTemplate?.id, mode]);
 
@@ -2867,6 +3017,8 @@ function QuestionStudio({
   const questionTotal = result?.total ?? 0;
   const totalPages = result?.totalPages ?? 1;
   const libraryProgress = totalPages ? Math.round((page / totalPages) * 100) : 0;
+  const visibleStart = result && questionTotal ? (page - 1) * result.pageSize + 1 : 0;
+  const visibleEnd = result && questionTotal ? Math.min(page * result.pageSize, questionTotal) : 0;
 
   useEffect(() => {
     if (!isExam || showResult || timeRemaining <= 0) return;
@@ -2995,6 +3147,7 @@ function QuestionStudio({
       {!isExam && isAllTests && (
         <section className="card question-toolbar">
           <span>{questionTotal} ta savol</span>
+          <span>{visibleStart}-{visibleEnd} ko'rsatilmoqda</span>
           <span>{page}/{totalPages} sahifa</span>
           <span>{libraryProgress}% ko'rildi</span>
           <button className={`pill ${hasVideo ? "active" : ""}`} onClick={() => { setPage(1); setHasVideo(!hasVideo); }}>
@@ -3244,7 +3397,17 @@ function QuestionStudio({
         </div>
       )}
 
-      {!isExam && <div className="pager">
+      {!isExam && isAllTests && result && (
+        <div className="pager all-tests-pager">
+          <button disabled={page <= 1} onClick={() => setPage(1)}>Birinchi</button>
+          <button disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Oldingi</button>
+          <span>{visibleStart}-{visibleEnd} / {questionTotal}</span>
+          <button disabled={page >= result.totalPages} onClick={() => setPage((current) => current + 1)}>Keyingi</button>
+          <button disabled={page >= result.totalPages} onClick={() => setPage(result.totalPages)}>Oxirgi</button>
+        </div>
+      )}
+
+      {!isExam && !isAllTests && <div className="pager">
         <button disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Oldingi</button>
         <button disabled={!result || page >= result.totalPages} onClick={() => setPage((current) => current + 1)}>Keyingi</button>
       </div>}
@@ -3938,7 +4101,7 @@ function OperationalPage({ view, data }: { view: View; data: AppData }) {
       <PageHeader title={viewTitles[view]} subtitle="Bo'lim lokal platforma dizayniga mos tayyorlandi va real oqimlarni ulashga tayyor." />
       <section className="placeholder-grid">
         <article className="card placeholder-page">
-          <span className="metric-icon"><LayoutDashboard size={22} /></span>
+          <span className="metric-icon"><Gauge size={22} /></span>
           <h2>Operatsion holat</h2>
           <p>Ma'lumotlar offline bazadan olinadi. Keyingi bosqichda forma va bildirishnomalar ulanadi.</p>
           <div className="stat-list">

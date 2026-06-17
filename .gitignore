@@ -1,5 +1,10 @@
 node_modules/
 dev-server*.log
+server*.log
+backend-test*.log
+data/*.sqlite-shm
+data/*.sqlite-wal
+data/backups/
 *.tsbuildinfo
 .env
 .env.*

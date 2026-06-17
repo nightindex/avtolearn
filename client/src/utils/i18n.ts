@@ -13,6 +13,12 @@ export const languageDescriptions: Record<AppLanguage, string> = {
 };
 
 export const ruDictionary: Record<string, string> = {
+  "Email yoki parol noto'g'ri.": "Неверный email или пароль.",
+  "Raqamli ta'lim portali": "Цифровой учебный портал",
+  "Xavfsiz kirish": "Безопасный вход",
+  "Himoyalangan kirish": "Защищенный вход",
+  "Kabinetga kirish": "Вход в кабинет",
+  "AvtoLearn platformasiga xavfsiz ulaning.": "Безопасный доступ к платформе AvtoLearn.",
   "O'qish": "Обучение",
   "Testlar": "Тесты",
   "Natijalar": "Результаты",
@@ -139,12 +145,9 @@ export const ruDictionary: Record<string, string> = {
   "Eslab qolish": "Запомнить меня",
   "Kirish": "Войти",
   "Kirish tekshirilmoqda...": "Проверка входа...",
-  "Demo kirish": "Демо вход",
   "Email va parolni kiriting.": "Введите email и пароль.",
   "Email formati noto'g'ri.": "Неверный формат email.",
-  "Demo email yoki parol noto'g'ri.": "Неверный demo email или пароль.",
   "O'quv platformasi": "Учебная платформа",
-  "Mahalliy demo": "Локальное demo",
   "Bugungi mashg'ulotga tayyormisiz?": "Готовы к сегодняшней тренировке?",
   "Shaxsiy progress, saqlangan testlar va AI yordamchi bilan tezkor kirish.": "Быстрый доступ к личному прогрессу, сохраненным тестам и AI помощнику.",
   "Savollar bazasi": "База вопросов",

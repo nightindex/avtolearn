@@ -1,4 +1,47 @@
-import type { AppData, ProgressSummary, QuestionResponse, RecentProgressItem, TestTemplate } from "./types";
+import type {
+  AdminPermission,
+  AdminReport,
+  AdminRole,
+  AdminUser,
+  AppData,
+  CatalogItem,
+  CatalogResource,
+  ProgressSummary,
+  QuestionResponse,
+  RecentProgressItem,
+  TestTemplate,
+} from "./types";
+
+export type AuthUser = {
+  id: number;
+  email: string;
+  name: string;
+  roles: string[];
+  permissions: string[];
+};
+
+export async function login(input: { email: string; password: string }): Promise<AuthUser> {
+  const response = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error("Email yoki parol noto'g'ri.");
+  const payload = await response.json() as { user: AuthUser };
+  return payload.user;
+}
+
+export async function logout() {
+  await fetch("/api/auth/logout", { method: "POST" });
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const response = await fetch("/api/auth/me");
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error("Failed to load current user");
+  const payload = await response.json() as { user: AuthUser };
+  return payload.user;
+}
 
 export async function getData(): Promise<AppData> {
   const response = await fetch("/api/data");
@@ -99,4 +142,77 @@ export async function saveTemplate(input: { templateId: number; saved: boolean }
     body: JSON.stringify(input),
   });
   if (!response.ok) throw new Error("Failed to save template");
+}
+
+async function adminJson<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers || {}),
+    },
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(payload?.error || "Admin request failed");
+  }
+  return response.json() as Promise<T>;
+}
+
+export async function adminListUsers(): Promise<AdminUser[]> {
+  return adminJson<AdminUser[]>("/api/admin/users");
+}
+
+export async function adminCreateUser(input: Partial<AdminUser> & { password: string }): Promise<AdminUser> {
+  return adminJson<AdminUser>("/api/admin/users", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function adminUpdateUser(id: number, input: Partial<AdminUser> & { password?: string }): Promise<AdminUser> {
+  return adminJson<AdminUser>(`/api/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function adminDeleteUser(id: number): Promise<void> {
+  await adminJson<{ ok: boolean }>(`/api/admin/users/${id}`, { method: "DELETE" });
+}
+
+export async function adminListRoles(): Promise<AdminRole[]> {
+  return adminJson<AdminRole[]>("/api/admin/roles");
+}
+
+export async function adminListPermissions(): Promise<AdminPermission[]> {
+  return adminJson<AdminPermission[]>("/api/admin/permissions");
+}
+
+export async function adminGetReport(params?: { userId?: number }): Promise<AdminReport> {
+  const search = new URLSearchParams();
+  if (params?.userId) search.set("userId", String(params.userId));
+  return adminJson<AdminReport>(`/api/admin/reports${search.size ? `?${search}` : ""}`);
+}
+
+export async function adminListCatalog(resource: CatalogResource): Promise<CatalogItem[]> {
+  return adminJson<CatalogItem[]>(`/api/admin/catalog/${resource}`);
+}
+
+export async function adminCreateCatalog(resource: CatalogResource, input: CatalogItem): Promise<CatalogItem> {
+  return adminJson<CatalogItem>(`/api/admin/catalog/${resource}`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function adminUpdateCatalog(resource: CatalogResource, id: number, input: CatalogItem): Promise<CatalogItem> {
+  return adminJson<CatalogItem>(`/api/admin/catalog/${resource}/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function adminDeleteCatalog(resource: CatalogResource, id: number): Promise<void> {
+  await adminJson<{ ok: boolean }>(`/api/admin/catalog/${resource}/${id}`, { method: "DELETE" });
 }

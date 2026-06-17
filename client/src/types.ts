@@ -141,3 +141,59 @@ export type RecentProgressItem = {
   createdAt: string;
   correct?: boolean;
 };
+
+export type AdminRole = {
+  id: number;
+  key: string;
+  name: string;
+};
+
+export type AdminPermission = {
+  id: number;
+  key: string;
+  description: string;
+};
+
+export type AdminUser = {
+  id: number;
+  email: string;
+  name: string;
+  active: number | boolean;
+  roles: string[];
+  permissions?: string[];
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type AdminReport = {
+  users: number;
+  progress: {
+    answered: number;
+    correct: number;
+  };
+  attempts: {
+    count: number;
+    averagePercent: number | null;
+  };
+  savedQuestions: number;
+  aiMessages: number;
+  byTemplate: {
+    mode: string;
+    attempts: number;
+    bestPercent: number | null;
+  }[];
+};
+
+export type CatalogResource =
+  | "lessons"
+  | "topics"
+  | "topic-contents"
+  | "questions"
+  | "templates"
+  | "road-sign-categories"
+  | "road-signs"
+  | "penalties";
+
+export type CatalogItem = Record<string, unknown> & {
+  id?: number;
+};
