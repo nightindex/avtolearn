@@ -59,7 +59,7 @@ import { Dashboard } from "./components/Dashboard";
 import { AppLanguage, languages, languageDescriptions, translateUi } from "./utils/i18n";
 import { LoginPage } from "./components/LoginPage";
 import { LanguageSelector } from "./components/LanguageSelector";
-import { AdminShell, canUseAdmin } from "./components/admin/AdminShell";
+import { AdminShell, canUseAdmin, type AdminSection } from "./components/admin/AdminShell";
 
 type View =
   | "home"
@@ -142,6 +142,45 @@ const viewTitles: Record<View, string> = {
 
 // AppLanguage, languages, and languageDescriptions are now imported from ./utils/i18n
 
+const learnerPathByView: Record<Exclude<View, "admin">, string> = {
+  home: "/learner/dashboard",
+  lessons: "/learner/lessons",
+  "road-signs": "/learner/road-signs",
+  penalties: "/learner/penalties",
+  appeals: "/learner/appeals",
+  autodrome: "/learner/autodrome",
+  group: "/learner/rating",
+  "template-tests": "/learner/tests/templates",
+  "random-tests": "/learner/tests/random",
+  "all-tests": "/learner/tests/all",
+  "saved-tests": "/learner/tests/saved",
+  "final-exam": "/learner/tests/final-exam",
+  ai: "/learner/ai-tutor",
+  profile: "/learner/profile",
+};
+
+const viewByLearnerPath = new Map<string, Exclude<View, "admin">>(
+  Object.entries(learnerPathByView).map(([view, path]) => [path, view as Exclude<View, "admin">]),
+);
+
+const adminPathBySection: Record<AdminSection, string> = {
+  overview: "/admin/dashboard",
+  users: "/admin/users",
+  reports: "/admin/reports",
+  lessons: "/admin/catalog/lessons",
+  topics: "/admin/catalog/topics",
+  "topic-contents": "/admin/catalog/topic-contents",
+  questions: "/admin/catalog/questions",
+  templates: "/admin/catalog/templates",
+  "road-sign-categories": "/admin/catalog/road-sign-categories",
+  "road-signs": "/admin/catalog/road-signs",
+  penalties: "/admin/catalog/penalties",
+};
+
+const adminSectionByPath = new Map<string, AdminSection>(
+  Object.entries(adminPathBySection).map(([section, path]) => [path, section as AdminSection]),
+);
+
 const profileUser = {
   name: "I.MUXTOROV",
   initials: "I",
@@ -171,15 +210,33 @@ function userInitials(user: AuthUser | null) {
     .join("") || "U";
 }
 
-function workspaceFromPath() {
-  return window.location.pathname === "/admin" ? "admin" : "learner";
+function routeFromPath(pathname = window.location.pathname): { workspace: "admin"; section: AdminSection } | { workspace: "learner"; view: Exclude<View, "admin"> } {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  if (path === "/admin") return { workspace: "admin", section: "overview" };
+  if (path.startsWith("/admin/")) return { workspace: "admin", section: adminSectionByPath.get(path) || "overview" };
+  if (path === "/" || path === "/login" || path === "/learner") return { workspace: "learner", view: "home" };
+  if (path.startsWith("/learner/")) return { workspace: "learner", view: viewByLearnerPath.get(path) || "home" };
+  return { workspace: "learner", view: "home" };
 }
 
-function setWorkspacePath(workspace: "admin" | "learner", mode: "push" | "replace" = "push") {
-  const nextPath = workspace === "admin" ? "/admin" : "/learner";
+function setLoginPath(mode: "push" | "replace" = "replace") {
+  if (window.location.pathname === "/login") return;
+  const method = mode === "replace" ? "replaceState" : "pushState";
+  window.history[method]({ view: "login" }, "", "/login");
+}
+
+function setAppPath(next: View, mode: "push" | "replace" = "push", adminSection: AdminSection = "overview") {
+  const nextPath = next === "admin" ? adminPathBySection[adminSection] : learnerPathByView[next];
   if (window.location.pathname === nextPath) return;
   const method = mode === "replace" ? "replaceState" : "pushState";
-  window.history[method]({ workspace }, "", nextPath);
+  window.history[method]({ view: next, adminSection }, "", nextPath);
+}
+
+function permittedAdminSection(user: AuthUser, section: AdminSection): AdminSection {
+  if (section === "overview") return section;
+  if (section === "users") return user.permissions.includes("admin:users") ? section : "overview";
+  if (section === "reports") return user.permissions.includes("admin:reports") ? section : "overview";
+  return user.permissions.includes("admin:catalog") ? section : "overview";
 }
 
 
@@ -321,6 +378,7 @@ function App() {
   const [activeTemplate, setActiveTemplate] = useState<TestTemplate | null>(null);
   const [activeRandomTest, setActiveRandomTest] = useState<RandomTestConfig | null>(null);
   const [activeFinalExam, setActiveFinalExam] = useState<RandomTestConfig | null>(null);
+  const [adminSection, setAdminSection] = useState<AdminSection>("overview");
 
   useEffect(() => {
     getCurrentUser()
@@ -329,20 +387,26 @@ function App() {
         setIsAuthenticated(Boolean(user));
         if (!user) {
           localStorage.removeItem(AUTH_STORAGE_KEY);
+          setLoginPath("replace");
           return;
         }
-        if (workspaceFromPath() === "admin" && canUseAdmin(user)) {
+        const route = routeFromPath();
+        if (route.workspace === "admin" && canUseAdmin(user)) {
+          const nextSection = permittedAdminSection(user, route.section);
+          setAdminSection(nextSection);
           setView("admin");
-          setWorkspacePath("admin", "replace");
+          setAppPath("admin", "replace", nextSection);
           return;
         }
-        setView("home");
-        setWorkspacePath("learner", "replace");
+        const nextView = route.workspace === "learner" ? route.view : "home";
+        setView(nextView);
+        setAppPath(nextView, "replace");
       })
       .catch(() => {
         setCurrentUser(null);
         setIsAuthenticated(false);
         localStorage.removeItem(AUTH_STORAGE_KEY);
+        setLoginPath("replace");
       })
       .finally(() => setAuthChecked(true));
   }, []);
@@ -382,32 +446,45 @@ function App() {
   const navigateTo = useCallback((next: View) => {
     if (next === "admin" && !canUseAdmin(currentUser)) {
       setView("home");
-      setWorkspacePath("learner", "replace");
+      setAppPath("home", "replace");
       return;
     }
-    if (next === "admin") setWorkspacePath("admin");
-    else if (view === "admin") setWorkspacePath("learner");
+    if (next === "admin") {
+      setAdminSection("overview");
+      setAppPath("admin", "push", "overview");
+    } else {
+      setAppPath(next);
+    }
     setView(next);
     if (next !== "template-tests") setActiveTemplate(null);
     if (next !== "random-tests") setActiveRandomTest(null);
     if (next !== "final-exam") setActiveFinalExam(null);
     setSidebarOpen(false);
     setGlobalSearch("");
-  }, [currentUser, view]);
+  }, [currentUser]);
 
   useEffect(() => {
     if (!authChecked || !isAuthenticated) return;
     const onPopState = () => {
-      if (workspaceFromPath() === "admin") {
-        if (canUseAdmin(currentUser)) {
+      const route = routeFromPath();
+      if (route.workspace === "admin") {
+        if (currentUser && canUseAdmin(currentUser)) {
+          const nextSection = permittedAdminSection(currentUser, route.section);
+          setAdminSection(nextSection);
           setView("admin");
+          if (nextSection !== route.section) setAppPath("admin", "replace", nextSection);
           return;
         }
         setView("home");
-        setWorkspacePath("learner", "replace");
+        setAppPath("home", "replace");
         return;
       }
-      setView((current) => current === "admin" ? "home" : current);
+      setView(route.view);
+      if (route.view !== "template-tests") setActiveTemplate(null);
+      if (route.view !== "random-tests") setActiveRandomTest(null);
+      if (route.view !== "final-exam") setActiveFinalExam(null);
+      setSidebarOpen(false);
+      setGlobalSearch("");
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -423,7 +500,7 @@ function App() {
     setCurrentUser(user);
     localStorage.setItem(AUTH_STORAGE_KEY, "true");
     setIsAuthenticated(true);
-    setWorkspacePath("learner", "replace");
+    setAppPath("home", "replace");
     setView("home");
   };
 
@@ -442,7 +519,7 @@ function App() {
     setActiveFinalExam(null);
     setSidebarOpen(false);
     setGlobalSearch("");
-    setWorkspacePath("learner", "replace");
+    setLoginPath("replace");
     setView("home");
   };
 
@@ -500,10 +577,24 @@ function App() {
             navigateTo("home");
           }}
           onCatalogChanged={loadAppData}
+          initialSection={adminSection}
+          onSectionChange={(section) => {
+            setAdminSection(section);
+            setAppPath("admin", "push", section);
+          }}
+          darkMode={darkMode}
+          language={language}
+          setLanguage={setLanguage}
+          toggleTheme={() => setDarkMode((value) => !value)}
+          onNavigateLearner={(target) => {
+            loadAppData();
+            navigateTo(target);
+          }}
+          onLogout={logout}
         />
       );
     }
-    if (view === "home") return <Dashboard data={data} summary={summary} recent={recent} setView={setView} />;
+    if (view === "home") return <Dashboard data={data} summary={summary} recent={recent} setView={navigateTo} />;
     if (view === "profile") {
       return (
         <ProfilePage
@@ -992,6 +1083,79 @@ function PageHeader({
   );
 }
 
+const paginationPageSizes = [10, 20, 50, 100];
+
+function paginationItems(currentPage: number, totalPages: number) {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+  if (currentPage <= 4) [2, 3, 4, 5].forEach((pageNumber) => pages.add(pageNumber));
+  if (currentPage >= totalPages - 3) [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1].forEach((pageNumber) => pages.add(pageNumber));
+  const sorted = Array.from(pages).filter((pageNumber) => pageNumber >= 1 && pageNumber <= totalPages).sort((a, b) => a - b);
+  return sorted.reduce<Array<number | "ellipsis">>((items, pageNumber, index) => {
+    if (index > 0 && pageNumber - sorted[index - 1] > 1) items.push("ellipsis");
+    items.push(pageNumber);
+    return items;
+  }, []);
+}
+
+function PaginationControl({
+  page,
+  pageSize,
+  totalItems,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const start = totalItems ? (currentPage - 1) * pageSize + 1 : 0;
+  const end = totalItems ? Math.min(currentPage * pageSize, totalItems) : 0;
+  const items = paginationItems(currentPage, totalPages);
+
+  return (
+    <nav className="modern-pagination" aria-label="Sahifalash">
+      <div className="pagination-summary">
+        <strong>{start}-{end}</strong>
+        <span>/ {totalItems}</span>
+      </div>
+      <div className="pagination-pages">
+        <button className="pagination-arrow" disabled={currentPage <= 1} onClick={() => onPageChange(currentPage - 1)} type="button" aria-label="Oldingi sahifa">
+          <ArrowLeft size={17} />
+        </button>
+        {items.map((item, index) => item === "ellipsis" ? (
+          <span className="pagination-ellipsis" key={`ellipsis-${index}`}>...</span>
+        ) : (
+          <button className={item === currentPage ? "active" : ""} key={item} onClick={() => onPageChange(item)} type="button">
+            {item}
+          </button>
+        ))}
+        <button className="pagination-arrow" disabled={currentPage >= totalPages} onClick={() => onPageChange(currentPage + 1)} type="button" aria-label="Keyingi sahifa">
+          <ArrowRight size={17} />
+        </button>
+      </div>
+      <label className="pagination-size">
+        <span>Ko'rsatish</span>
+        <select
+          value={pageSize}
+          onChange={(event) => {
+            onPageSizeChange(Number(event.target.value));
+            onPageChange(1);
+          }}
+        >
+          {paginationPageSizes.map((size) => (
+            <option key={size} value={size}>{size} / page</option>
+          ))}
+        </select>
+      </label>
+    </nav>
+  );
+}
+
 function ProfilePage({
   data,
   summary,
@@ -1462,6 +1626,7 @@ function RoadSigns({ data }: { data: AppData }) {
   const [selectedSign, setSelectedSign] = useState<RoadSignItem | null>(null);
   const [selectedPreviewIndex, setSelectedPreviewIndex] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const roadSignModalBodyRef = useRef<HTMLDivElement | null>(null);
   const sortedTypes = useMemo(
     () => data.signs.slice().sort((a, b) => a.id - b.id || compareCode(a.code, b.code)),
@@ -1478,7 +1643,6 @@ function RoadSigns({ data }: { data: AppData }) {
         : [],
     [data.roadSigns, selectedTypeId],
   );
-  const pageSize = 12;
   const totalPages = Math.max(1, Math.ceil(selectedSigns.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const visibleSigns = selectedSigns.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -1554,28 +1718,13 @@ function RoadSigns({ data }: { data: AppData }) {
             </div>
           )}
 
-          {totalPages > 1 && (
-            <div className="road-sign-pagination" aria-label="Belgilar sahifalari">
-              <button disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-                <ChevronDown className="rotate-90" size={18} />
-              </button>
-              {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-                <button
-                  className={pageNumber === currentPage ? "active" : ""}
-                  key={pageNumber}
-                  onClick={() => setPage(pageNumber)}
-                >
-                  {pageNumber}
-                </button>
-              ))}
-              <button
-                disabled={currentPage === totalPages}
-                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-              >
-                <ChevronDown className="rotate-270" size={18} />
-              </button>
-            </div>
-          )}
+          <PaginationControl
+            page={currentPage}
+            pageSize={pageSize}
+            totalItems={selectedSigns.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </section>
 
         {selectedSign && (() => {
@@ -1838,6 +1987,8 @@ function PenaltiesPage({ data }: { data: AppData }) {
   const [selectedCategory, setSelectedCategory] = useState<PenaltyCategory>("all");
   const [simulatedFines, setSimulatedFines] = useState<Penalty[]>([]);
   const [selectedPenalty, setSelectedPenalty] = useState<Penalty | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const penalties = data.penalties || [];
 
@@ -1870,13 +2021,21 @@ function PenaltiesPage({ data }: { data: AppData }) {
     const matchesSearch = text.includes(query.toLowerCase().trim());
     return matchesCat && matchesSearch;
   });
+  const totalPenaltyPages = Math.max(1, Math.ceil(displayPenalties.length / pageSize));
+  const currentPenaltyPage = Math.min(page, totalPenaltyPages);
+  const visiblePenalties = displayPenalties.slice((currentPenaltyPage - 1) * pageSize, currentPenaltyPage * pageSize);
 
   const handleModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value as PenaltySection;
     setMode(val);
     setQuery("");
+    setPage(1);
     setSelectedPenalty(null);
   };
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, selectedCategory, pageSize]);
 
   useEffect(() => {
     if (!selectedPenalty) return;
@@ -2007,7 +2166,7 @@ function PenaltiesPage({ data }: { data: AppData }) {
         </div>
 
         <div className="penalty-card-grid">
-          {displayPenalties.map((penalty) => {
+          {visiblePenalties.map((penalty) => {
             const points = getPenaltyPoints(penalty);
             const pointsText = points > 0 ? `+${points} BALL` : null;
             const isHeavy = categorizePenalty(penalty).includes("heavy");
@@ -2052,6 +2211,13 @@ function PenaltiesPage({ data }: { data: AppData }) {
             );
           })}
         </div>
+        <PaginationControl
+          page={currentPenaltyPage}
+          pageSize={pageSize}
+          totalItems={displayPenalties.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
         {selectedPenalty && (() => {
           const points = getPenaltyPoints(selectedPenalty);
           const pointsText = points > 0 ? `+${points} BALL` : "Ball belgilanmagan";
@@ -2870,6 +3036,7 @@ function QuestionStudio({
   const [query, setQuery] = useState("");
   const [hasVideo, setHasVideo] = useState(false);
   const [page, setPage] = useState(1);
+  const [allTestsPageSize, setAllTestsPageSize] = useState(10);
   const [result, setResult] = useState<QuestionResponse | null>(null);
   const [examResult, setExamResult] = useState<QuestionResponse | null>(null);
   const [selected, setSelected] = useState<Record<number, number>>({});
@@ -2884,9 +3051,9 @@ function QuestionStudio({
   const [savedQuestionIds, setSavedQuestionIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    const pageSize = mode === "all-tests" && !activeTemplate ? 24 : 1;
+    const pageSize = mode === "all-tests" && !activeTemplate ? allTestsPageSize : 1;
     getQuestions({ page, pageSize, query, hasVideo: hasVideo || undefined, templateId: activeTemplate?.id }).then(setResult).catch(console.error);
-  }, [page, query, hasVideo, activeTemplate?.id, mode]);
+  }, [page, query, hasVideo, activeTemplate?.id, mode, allTestsPageSize]);
 
   useEffect(() => {
     if (mode !== "all-tests") return;
@@ -3398,13 +3565,13 @@ function QuestionStudio({
       )}
 
       {!isExam && isAllTests && result && (
-        <div className="pager all-tests-pager">
-          <button disabled={page <= 1} onClick={() => setPage(1)}>Birinchi</button>
-          <button disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Oldingi</button>
-          <span>{visibleStart}-{visibleEnd} / {questionTotal}</span>
-          <button disabled={page >= result.totalPages} onClick={() => setPage((current) => current + 1)}>Keyingi</button>
-          <button disabled={page >= result.totalPages} onClick={() => setPage(result.totalPages)}>Oxirgi</button>
-        </div>
+        <PaginationControl
+          page={page}
+          pageSize={result.pageSize || allTestsPageSize}
+          totalItems={questionTotal}
+          onPageChange={setPage}
+          onPageSizeChange={setAllTestsPageSize}
+        />
       )}
 
       {!isExam && !isAllTests && <div className="pager">
@@ -3427,6 +3594,8 @@ function SavedTestsPage({
   const [selected, setSelected] = useState<Record<number, number>>({});
   const [mediaTabs, setMediaTabs] = useState<Record<number, "image" | "video">>({});
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const loadSaved = useCallback(() => {
     setLoading(true);
@@ -3444,6 +3613,13 @@ function SavedTestsPage({
     const haystack = `${question.title} ${question.explanation} ${question.answers.map((answer) => answer.text).join(" ")}`.toLowerCase();
     return haystack.includes(query.toLowerCase());
   });
+  const totalSavedPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentSavedPage = Math.min(page, totalSavedPages);
+  const visibleSaved = filtered.slice((currentSavedPage - 1) * pageSize, currentSavedPage * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, pageSize]);
 
   async function answerSavedQuestion(question: Question, answerId: number) {
     const answer = question.answers.find((item) => item.id === answerId);
@@ -3496,14 +3672,15 @@ function SavedTestsPage({
 
       {!loading && filtered.length > 0 && (
         <section className="all-tests-list saved-tests-list">
-          {filtered.map((question, index) => {
+          {visibleSaved.map((question, index) => {
             const pickedForQuestion = selected[question.id];
             const pickedAnswerForQuestion = question.answers.find((answer) => answer.id === pickedForQuestion);
             const activeMediaTab = mediaTabs[question.id] ?? "image";
+            const absoluteNumber = (currentSavedPage - 1) * pageSize + index + 1;
             return (
               <article className="card all-test-card saved-test-card" key={question.id}>
                 <header className="all-test-card-head">
-                  <span>{index + 1}</span>
+                  <span>{absoluteNumber}</span>
                   <h2>{clean(question.title)}</h2>
                   <div className="all-test-card-actions">
                     <button className="ghost-button danger" onClick={() => removeSavedQuestion(question)} type="button">
@@ -3579,6 +3756,15 @@ function SavedTestsPage({
             );
           })}
         </section>
+      )}
+      {!loading && filtered.length > 0 && (
+        <PaginationControl
+          page={currentSavedPage}
+          pageSize={pageSize}
+          totalItems={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       )}
     </div>
   );
