@@ -1,19 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  ArrowRight,
   Activity,
   BarChart3,
-  Bookmark,
+  Bell,
   BookOpen,
   Bot,
   Check,
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  Crown,
   Database,
   FileText,
   Flag,
   Gauge,
+  Expand,
   GraduationCap,
   Layers3,
   Loader2,
@@ -29,7 +32,6 @@ import {
   TrafficCone,
   TrendingUp,
   Trash2,
-  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -85,12 +87,21 @@ const adminTranslations: Record<AppLanguage, Record<string, string>> = {
     "Management console": "Boshqaruv paneli",
     "Learner app": "O'quvchi kabineti",
     "Back to learner": "O'quvchi sahifasiga o'tish",
+    Administrator: "Administrator",
     Account: "Hisob",
     "Profile and settings": "Profil va sozlamalar",
     "Saved tests": "Saqlangan testlar",
     "Review saved questions and templates.": "Saqlangan savollar va shablonlarni qayta ko'ring.",
     "AI help": "AI yordam",
     "Analyze hard questions with AI tutor.": "AI tutor bilan qiyin savollarni tahlil qiling.",
+    "Admin panel": "Admin panel",
+    "Admin dashboard": "Admin bosh sahifa",
+    "Open management overview.": "Boshqaruv ko'rinishini ochish.",
+    "Manage users": "Foydalanuvchilar",
+    "Manage accounts and roles.": "Akkaunt va rollarni boshqarish.",
+    "Open reports and progress analytics.": "Hisobot va progress tahlillarini ochish.",
+    "Edit catalog content.": "Katalog kontentini tahrirlash.",
+    "Switch to learner dashboard.": "O'quvchi kabinetiga o'tish.",
     Logout: "Chiqish",
     "Return to login page": "Login sahifasiga qaytish",
     Lessons: "Darslar",
@@ -137,6 +148,14 @@ const adminTranslations: Record<AppLanguage, Record<string, string>> = {
     "New password": "Yangi parol",
     "Active account": "Faol akkaunt",
     Roles: "Rollar",
+    "Super admin": "Super admin",
+    Admin: "Admin",
+    Student: "O'quvchi",
+    "Full platform access": "Platformaga to'liq kirish",
+    "Manage operations and content": "Amaliyot va kontentni boshqarish",
+    "Learner workspace access": "O'quvchi kabinetiga kirish",
+    Tests: "Testlar",
+    Progress: "Progress",
     "All users": "Barcha foydalanuvchilar",
     "Progress, attempts, saved questions, and AI usage.": "Progress, urinishlar, saqlangan savollar va AI ishlatilishi.",
     Attempts: "Urinishlar",
@@ -183,6 +202,62 @@ const adminTranslations: Record<AppLanguage, Record<string, string>> = {
     Article: "Modda",
     Amount: "Miqdor",
     Points: "Ballar",
+    ID: "ID",
+    Email: "Email",
+    id: "ID",
+    title: "Sarlavha",
+    shortName: "Qisqa nom",
+    topicCount: "Mavzular soni",
+    sourceLessonId: "Manba dars ID",
+    lessonId: "Dars ID",
+    topicId: "Mavzu ID",
+    type: "Turi",
+    questionCount: "Savollar soni",
+    timeLimit: "Vaqt limiti",
+    content: "Kontent",
+    image: "Rasm",
+    video: "Video",
+    name: "Nomi",
+    questions: "Savollar",
+    durationMinutes: "Davomiylik",
+    bestPercent: "Eng yaxshi foiz",
+    code: "Kod",
+    count: "Soni",
+    typeId: "Toifa ID",
+    description: "Tavsif",
+    article: "Modda",
+    amount: "Miqdor",
+    points: "Ballar",
+    BCV: "BHM",
+    bcv: "BHM",
+    "One path per line": "Har bir yo'l alohida qatorda",
+    Workspace: "Ish muhiti",
+    Search: "Qidiruv...",
+    "Day mode": "Kunduzgi rejim",
+    "Night mode": "Tungi rejim",
+    Fullscreen: "To'liq ekran",
+    Notifications: "Bildirishnomalar",
+    Status: "Holat",
+    Inactive: "Nofaol",
+    "Mode / template": "Rejim / shablon",
+    "Name and email are required.": "Ism va email kiritilishi shart.",
+    "Password is required for new users.": "Yangi foydalanuvchi uchun parol kiritilishi shart.",
+    "Failed to load users": "Foydalanuvchilarni yuklab bo'lmadi",
+    "Failed to save user": "Foydalanuvchini saqlab bo'lmadi",
+    "Failed to delete user": "Foydalanuvchini o'chirib bo'lmadi",
+    "Failed to load reports": "Hisobotlarni yuklab bo'lmadi",
+    "Failed to load records": "Yozuvlarni yuklab bo'lmadi",
+    "Failed to save record": "Yozuvni saqlab bo'lmadi",
+    "Failed to delete record": "Yozuvni o'chirib bo'lmadi",
+    "Admin access required": "Admin ruxsati talab qilinadi",
+    "This account does not have admin permissions.": "Bu akkauntda admin ruxsatlari yo'q.",
+    "AI tutor": "AI tutor",
+    "Admin changes saved": "Admin o'zgarishlari saqlandi",
+    "Catalog and account edits are stored locally.": "Katalog va akkaunt tahrirlari lokal saqlandi.",
+    "Reports are ready": "Hisobotlar tayyor",
+    "Progress analytics are available in the reports section.": "Progress tahlillari hisobotlar bo'limida mavjud.",
+    "Learner workspace": "O'quvchi muhiti",
+    "Switch back to learner tools from the top navbar.": "Yuqori paneldan o'quvchi vositalariga qayting.",
   },
   "uz-cyrl": {},
   ru: {
@@ -194,12 +269,21 @@ const adminTranslations: Record<AppLanguage, Record<string, string>> = {
     "Management console": "Панель управления",
     "Learner app": "Кабинет ученика",
     "Back to learner": "Перейти к ученику",
+    Administrator: "Администратор",
     Account: "Аккаунт",
     "Profile and settings": "Профиль и настройки",
     "Saved tests": "Сохраненные тесты",
     "Review saved questions and templates.": "Просмотрите сохраненные вопросы и шаблоны.",
     "AI help": "AI помощь",
     "Analyze hard questions with AI tutor.": "Разбирайте сложные вопросы с AI tutor.",
+    "Admin panel": "Панель администратора",
+    "Admin dashboard": "Панель администратора",
+    "Open management overview.": "Открыть обзор управления.",
+    "Manage users": "Пользователи",
+    "Manage accounts and roles.": "Управление аккаунтами и ролями.",
+    "Open reports and progress analytics.": "Открыть отчеты и аналитику прогресса.",
+    "Edit catalog content.": "Редактировать контент каталога.",
+    "Switch to learner dashboard.": "Перейти в кабинет ученика.",
     Logout: "Выйти",
     "Return to login page": "Вернуться на страницу входа",
     Lessons: "Уроки",
@@ -246,6 +330,14 @@ const adminTranslations: Record<AppLanguage, Record<string, string>> = {
     "New password": "Новый пароль",
     "Active account": "Активный аккаунт",
     Roles: "Роли",
+    "Super admin": "Супер админ",
+    Admin: "Админ",
+    Student: "Ученик",
+    "Full platform access": "Полный доступ к платформе",
+    "Manage operations and content": "Управление операциями и контентом",
+    "Learner workspace access": "Доступ к кабинету ученика",
+    Tests: "Тесты",
+    Progress: "Прогресс",
     "All users": "Все пользователи",
     "Progress, attempts, saved questions, and AI usage.": "Прогресс, попытки, сохраненные вопросы и использование AI.",
     Attempts: "Попытки",
@@ -267,6 +359,189 @@ const adminTranslations: Record<AppLanguage, Record<string, string>> = {
     "No records found": "Записи не найдены",
     "Try a different search or create a new item.": "Попробуйте другой поиск или создайте новую запись.",
   },
+};
+
+adminTranslations.ru = {
+  ...adminTranslations.ru,
+  Overview: "Обзор",
+  Users: "Пользователи",
+  Reports: "Отчеты",
+  Catalog: "Каталог",
+  Sections: "Разделы",
+  Workspace: "Рабочая область",
+  Search: "Поиск...",
+  "Management console": "Панель управления",
+  "Learner app": "Кабинет ученика",
+  "Back to learner": "Перейти в кабинет ученика",
+  Administrator: "Администратор",
+  Account: "Аккаунт",
+  "Profile and settings": "Профиль и настройки",
+  "Saved tests": "Сохраненные тесты",
+  "Review saved questions and templates.": "Просмотрите сохраненные вопросы и шаблоны.",
+  "AI help": "AI помощь",
+  "Analyze hard questions with AI tutor.": "Разберите сложные вопросы с AI tutor.",
+  "Admin panel": "Панель администратора",
+  "Admin dashboard": "Панель администратора",
+  "Open management overview.": "Открыть обзор управления.",
+  "Manage users": "Пользователи",
+  "Manage accounts and roles.": "Управление аккаунтами и ролями.",
+  "Open reports and progress analytics.": "Открыть отчеты и аналитику прогресса.",
+  "Edit catalog content.": "Редактировать контент каталога.",
+  "Switch to learner dashboard.": "Перейти в кабинет ученика.",
+  Logout: "Выйти",
+  "Return to login page": "Вернуться на страницу входа",
+  Lessons: "Уроки",
+  Lesson: "Урок",
+  Topics: "Темы",
+  Topic: "Тема",
+  "Topic contents": "Контент тем",
+  "Topic content": "Контент темы",
+  Questions: "Вопросы",
+  Question: "Вопрос",
+  Templates: "Шаблоны",
+  Template: "Шаблон",
+  "Road sign categories": "Категории знаков",
+  "Road sign category": "Категория знаков",
+  "Road signs": "Дорожные знаки",
+  "Road sign": "Дорожный знак",
+  Penalties: "Штрафы",
+  Penalty: "Штраф",
+  "Production workspace": "Рабочая среда",
+  "Manage content quality, learner access, and platform performance.": "Управляйте качеством контента, доступом учеников и производительностью платформы.",
+  "Use this console for day-to-day catalog updates, user operations, and learning analytics.": "Используйте эту панель для обновления каталога, работы с пользователями и аналитики обучения.",
+  "New question": "Новый вопрос",
+  Answered: "Ответы",
+  Accuracy: "Точность",
+  "AI usage": "Использование AI",
+  "Accounts and role access": "Аккаунты и роли",
+  "Catalog CMS": "Управление каталогом",
+  "Lessons, tests, signs, penalties": "Уроки, тесты, знаки, штрафы",
+  "Progress and usage analytics": "Аналитика прогресса и использования",
+  "Catalog shortcuts": "Быстрый доступ к каталогу",
+  "Most edited areas": "Часто редактируемые разделы",
+  "System pulse": "Состояние системы",
+  "Operational health": "Рабочий статус",
+  "Auth sessions": "Сессии авторизации",
+  "Catalog API": "API каталога",
+  Active: "Активно",
+  Inactive: "Неактивно",
+  Ready: "Готово",
+  "In use": "Используется",
+  Standby: "Ожидание",
+  "Edit user": "Редактировать пользователя",
+  "Create user": "Создать пользователя",
+  Name: "Имя",
+  Password: "Пароль",
+  "New password": "Новый пароль",
+  "Active account": "Активный аккаунт",
+  Roles: "Роли",
+  "Super admin": "Супер админ",
+  Admin: "Админ",
+  Student: "Ученик",
+  "Full platform access": "Полный доступ к платформе",
+  "Manage operations and content": "Управление операциями и контентом",
+  "Learner workspace access": "Доступ к кабинету ученика",
+  Tests: "Тесты",
+  Progress: "Прогресс",
+  "All users": "Все пользователи",
+  "Progress, attempts, saved questions, and AI usage.": "Прогресс, попытки, сохраненные вопросы и использование AI.",
+  Attempts: "Попытки",
+  Saved: "Сохранено",
+  "AI messages": "AI сообщения",
+  Refresh: "Обновить",
+  records: "записей",
+  "Search records": "Поиск записей",
+  New: "Новый",
+  Edit: "Редактировать",
+  Create: "Создать",
+  Editor: "Редактор",
+  Delete: "Удалить",
+  Cancel: "Отмена",
+  Save: "Сохранить",
+  Answer: "Ответ",
+  "Add answer": "Добавить ответ",
+  "Loading records": "Загрузка записей",
+  "No records found": "Записи не найдены",
+  "Try a different search or create a new item.": "Попробуйте другой поиск или создайте новую запись.",
+  Title: "Заголовок",
+  "Short name": "Краткое название",
+  "Source lesson ID": "ID исходного урока",
+  "Topic count": "Количество тем",
+  "Lesson ID": "ID урока",
+  Type: "Тип",
+  "Question count": "Количество вопросов",
+  "Time limit": "Лимит времени",
+  "Topic ID": "ID темы",
+  Content: "Контент",
+  "Question title": "Текст вопроса",
+  "Image path": "Путь к изображению",
+  "Video path": "Путь к видео",
+  Explanation: "Пояснение",
+  Answers: "Ответы",
+  "Duration minutes": "Длительность в минутах",
+  "Best percent": "Лучший процент",
+  Code: "Код",
+  Count: "Количество",
+  "Category ID": "ID категории",
+  Description: "Описание",
+  "Preview images": "Изображения предпросмотра",
+  "Audio path": "Путь к аудио",
+  Article: "Статья",
+  Amount: "Сумма",
+  Points: "Баллы",
+  ID: "ID",
+  Email: "Email",
+  id: "ID",
+  title: "Заголовок",
+  shortName: "Краткое название",
+  topicCount: "Количество тем",
+  sourceLessonId: "ID исходного урока",
+  lessonId: "ID урока",
+  topicId: "ID темы",
+  type: "Тип",
+  questionCount: "Количество вопросов",
+  timeLimit: "Лимит времени",
+  content: "Контент",
+  image: "Изображение",
+  video: "Видео",
+  name: "Название",
+  questions: "Вопросы",
+  durationMinutes: "Длительность",
+  bestPercent: "Лучший процент",
+  code: "Код",
+  count: "Количество",
+  typeId: "ID категории",
+  description: "Описание",
+  article: "Статья",
+  amount: "Сумма",
+  points: "Баллы",
+  BCV: "БРВ",
+  bcv: "БРВ",
+  "One path per line": "Один путь на строку",
+  "Day mode": "Светлая тема",
+  "Night mode": "Темная тема",
+  Fullscreen: "На весь экран",
+  Notifications: "Уведомления",
+  Status: "Статус",
+  "Mode / template": "Режим / шаблон",
+  "Name and email are required.": "Имя и email обязательны.",
+  "Password is required for new users.": "Для нового пользователя нужен пароль.",
+  "Failed to load users": "Не удалось загрузить пользователей",
+  "Failed to save user": "Не удалось сохранить пользователя",
+  "Failed to delete user": "Не удалось удалить пользователя",
+  "Failed to load reports": "Не удалось загрузить отчеты",
+  "Failed to load records": "Не удалось загрузить записи",
+  "Failed to save record": "Не удалось сохранить запись",
+  "Failed to delete record": "Не удалось удалить запись",
+  "Admin access required": "Требуется доступ администратора",
+  "This account does not have admin permissions.": "У этого аккаунта нет прав администратора.",
+  "AI tutor": "AI tutor",
+  "Admin changes saved": "Изменения администратора сохранены",
+  "Catalog and account edits are stored locally.": "Изменения каталога и аккаунтов сохранены локально.",
+  "Reports are ready": "Отчеты готовы",
+  "Progress analytics are available in the reports section.": "Аналитика прогресса доступна в разделе отчетов.",
+  "Learner workspace": "Среда ученика",
+  "Switch back to learner tools from the top navbar.": "Вернитесь к инструментам ученика через верхнюю панель.",
 };
 
 adminTranslations["uz-cyrl"] = Object.fromEntries(
@@ -419,6 +694,21 @@ function initials(name: string) {
     .join("") || "A";
 }
 
+function AdminUserAvatar({ user, className = "", size = 52 }: { user: AuthUser; className?: string; size?: number }) {
+  const resolvedSize = Math.min(96, Math.max(32, Number(user.avatarSize || size)));
+  const hasImage = Boolean(user.avatarUrl?.trim());
+  const style = {
+    "--avatar-color": user.avatarColor || "#1477d4",
+    "--avatar-size": `${resolvedSize}px`,
+  } as React.CSSProperties;
+  return (
+    <span className={`user-avatar ${hasImage ? "has-image" : "no-image"} ${className}`} style={style}>
+      <span>{initials(user.name)}</span>
+      {hasImage && <img alt="" src={user.avatarUrl} onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.closest(".user-avatar")?.classList.add("no-image"); }} />}
+    </span>
+  );
+}
+
 function formatValue(value: unknown) {
   if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -504,10 +794,15 @@ export function AdminShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [adminSearch, setAdminSearch] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const profileMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const notificationMenuRef = React.useRef<HTMLDivElement | null>(null);
   const canUsers = user.permissions.includes("admin:users");
   const canCatalog = user.permissions.includes("admin:catalog");
   const canReports = user.permissions.includes("admin:reports");
+  const t = (value: string) => adminTranslations[language]?.[value] ?? translateUi(value, language);
 
   useEffect(() => {
     setSection(initialSection);
@@ -524,14 +819,31 @@ export function AdminShell({
     return () => document.removeEventListener("mousedown", onClick);
   }, [profileOpen]);
 
+  useEffect(() => {
+    if (!notificationOpen) return;
+    const onClick = (event: MouseEvent) => {
+      if (notificationMenuRef.current && !notificationMenuRef.current.contains(event.target as Node)) {
+        setNotificationOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [notificationOpen]);
+
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
+  }, []);
+
   if (!canUseAdmin(user)) {
     return (
       <div className="admin-forbidden">
         <Shield size={36} />
-        <h1>Admin access required</h1>
-        <p>This account does not have admin permissions.</p>
+        <h1>{t("Admin access required")}</h1>
+        <p>{t("This account does not have admin permissions.")}</p>
         <button className="primary-button" onClick={onBack} type="button">
-          <ArrowLeft size={16} /> Back to learner
+          <ArrowLeft size={16} /> {t("Back to learner")}
         </button>
       </div>
     );
@@ -542,89 +854,166 @@ export function AdminShell({
     onSectionChange?.(next);
     setMobileNavOpen(false);
   };
-  const t = (value: string) => adminTranslations[language]?.[value] ?? translateUi(value, language);
+  const adminRoleLabel = user.roles.includes("super_admin")
+    ? "Super admin"
+    : user.roles.includes("admin")
+      ? "Administrator"
+      : user.roles.map((role) => role.replace(/_/g, " ")).join(", ");
   const goLearner = (target: LearnerTarget) => {
     setProfileOpen(false);
     onNavigateLearner(target);
   };
+  const goAdminSection = (target: AdminSection) => {
+    setProfileOpen(false);
+    openSection(target);
+  };
+  const notifications = [
+    { title: "Admin changes saved", detail: "Catalog and account edits are stored locally." },
+    { title: "Reports are ready", detail: "Progress analytics are available in the reports section." },
+    { title: "Learner workspace", detail: "Switch back to learner tools from the top navbar." },
+  ];
+  const toggleFullscreen = async () => {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+    await document.documentElement.requestFullscreen();
+  };
+  const toggleGroup = (title: string) => {
+    setCollapsedGroups((groups) => ({ ...groups, [title]: !groups[title] }));
+  };
+  const adminNavItem = (
+    target: AdminSection,
+    label: string,
+    Icon: typeof Gauge,
+  ) => (
+    <button
+      className={`nav-item ${section === target ? "active" : ""}`}
+      onClick={() => openSection(target)}
+      type="button"
+    >
+      <span className="nav-icon">
+        <Icon size={18} />
+      </span>
+      <span>{t(label)}</span>
+    </button>
+  );
 
   return (
     <AdminTranslateContext.Provider value={t}>
     <div className="admin-shell">
-      <aside className={`admin-sidebar ${mobileNavOpen ? "open" : ""}`}>
-        <div className="admin-brand">
+      <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
+        <div className="brand">
           <img src="/assets/static/Logo AvtoLearn.svg" alt="AvtoLearn" />
           <div>
             <strong>AVTOLEARN</strong>
             <small>ADMIN PANEL</small>
           </div>
         </div>
-        <nav className="admin-nav">
-          <button className={section === "overview" ? "active" : ""} onClick={() => openSection("overview")} type="button">
-            <Gauge size={16} /> {t("Overview")}
-          </button>
-          {canUsers && (
-            <button className={section === "users" ? "active" : ""} onClick={() => openSection("users")} type="button">
-              <Users size={16} /> {t("Users")}
+        <nav className="admin-sidebar-nav">
+          <div className={`nav-group ${collapsedGroups.workspace ? "collapsed" : ""}`}>
+            <button
+              aria-expanded={!collapsedGroups.workspace}
+              className="nav-title"
+              onClick={() => toggleGroup("workspace")}
+              type="button"
+            >
+              <span>{t("Workspace")}</span>
+              <ChevronDown size={13} />
             </button>
-          )}
-          {canReports && (
-            <button className={section === "reports" ? "active" : ""} onClick={() => openSection("reports")} type="button">
-              <BarChart3 size={16} /> {t("Reports")}
-            </button>
-          )}
+            <nav>
+              {adminNavItem("overview", "Overview", Gauge)}
+              {canUsers && adminNavItem("users", "Users", Users)}
+              {canReports && adminNavItem("reports", "Reports", BarChart3)}
+            </nav>
+          </div>
           {canCatalog && (
-            <div className="admin-nav-group">
-              <span>{t("Catalog")}</span>
-              {resources.map((resource) => {
-                const Icon = resource.icon;
-                return (
-                  <button
-                    className={section === resource.section ? "active" : ""}
-                    key={resource.section}
-                    onClick={() => openSection(resource.section)}
-                    type="button"
-                  >
-                    <Icon size={16} /> {t(resource.plural)}
-                  </button>
-                );
-              })}
+            <div className={`nav-group ${collapsedGroups.catalog ? "collapsed" : ""}`}>
+              <button
+                aria-expanded={!collapsedGroups.catalog}
+                className="nav-title"
+                onClick={() => toggleGroup("catalog")}
+                type="button"
+              >
+                <span>{t("Catalog")}</span>
+                <ChevronDown size={13} />
+              </button>
+              <nav>
+                {resources.map((resource) => adminNavItem(resource.section, resource.plural, resource.icon))}
+              </nav>
             </div>
           )}
         </nav>
       </aside>
       {mobileNavOpen && <button className="admin-mobile-scrim" onClick={() => setMobileNavOpen(false)} type="button" aria-label="Close menu" />}
       <main className="admin-main">
-        <header className="admin-header">
-          <div className="admin-header-search-row">
+        <header className="topbar admin-header">
+          <div className="search-wrapper admin-header-search-row">
             <button className="admin-menu-button" onClick={() => setMobileNavOpen(true)} type="button">
               <ChevronRight size={18} /> {t("Sections")}
             </button>
-            <label className="admin-global-search">
+            <label className="search-box global-search admin-global-search">
               <Search size={18} />
               <input
                 value={adminSearch}
                 onChange={(event) => setAdminSearch(event.target.value)}
-                placeholder={t("Qidiruv...")}
+                placeholder={t("Search")}
               />
               <kbd>Ctrl K</kbd>
             </label>
           </div>
-          <div className="admin-header-actions">
-            <LanguageSelector language={language} setLanguage={setLanguage} variant="topbar" />
+          <div className="topbar-actions admin-header-actions">
+            <button className="workspace-switcher admin-current-switcher" onClick={() => goLearner("home")} type="button">
+              <GraduationCap size={17} />
+              <span>{t("Learner app")}</span>
+            </button>
             <button
               aria-pressed={darkMode}
               className={`icon-button admin-theme-toggle ${darkMode ? "active" : ""}`}
               onClick={toggleTheme}
-              title={t(darkMode ? "Kunduzgi rejim" : "Tungi rejim")}
+              title={t(darkMode ? "Day mode" : "Night mode")}
               type="button"
             >
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button className="workspace-switcher admin-learner-switcher" onClick={() => goLearner("home")} type="button">
-              <GraduationCap size={16} />
-              <span>{t("Learner app")}</span>
+            <LanguageSelector language={language} setLanguage={setLanguage} variant="topbar" />
+            <button
+              aria-pressed={isFullscreen}
+              className={`icon-button topbar-tool admin-topbar-tool ${isFullscreen ? "active" : ""}`}
+              onClick={() => void toggleFullscreen()}
+              title={t("Fullscreen")}
+              type="button"
+            >
+              <Expand size={18} />
             </button>
+            <div className="topbar-menu" ref={notificationMenuRef}>
+              <button
+                aria-expanded={notificationOpen}
+                aria-haspopup="menu"
+                className={`icon-button topbar-tool admin-topbar-tool ${notificationOpen ? "active" : ""}`}
+                onClick={() => setNotificationOpen((open) => !open)}
+                title={t("Notifications")}
+                type="button"
+              >
+                <Bell size={18} />
+              </button>
+              {notificationOpen && (
+                <div className="topbar-dropdown notification-dropdown admin-notification-dropdown" role="menu">
+                  <div className="topbar-dropdown-head">
+                    <strong>{t("Notifications")}</strong>
+                    <small>{notifications.length}</small>
+                  </div>
+                  <div className="notification-list">
+                    {notifications.map((item) => (
+                      <button className="notification-item" key={item.title} type="button">
+                        <strong>{t(item.title)}</strong>
+                        <span>{t(item.detail)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="admin-profile-menu" ref={profileMenuRef}>
               <button
                 aria-expanded={profileOpen}
@@ -633,46 +1022,71 @@ export function AdminShell({
                 onClick={() => setProfileOpen((open) => !open)}
                 type="button"
               >
-                <span className="avatar">{initials(user.name)}</span>
+                <AdminUserAvatar user={user} className="avatar" size={34} />
                 <span className="profile-trigger-name">{user.name}</span>
                 <ChevronDown className="profile-trigger-chevron" size={15} />
               </button>
               {profileOpen && (
                 <div className="topbar-dropdown profile-dropdown admin-profile-dropdown" role="menu">
                   <div className="profile-dropdown-summary">
-                    <span className="profile-dropdown-avatar">{initials(user.name)}</span>
+                    <AdminUserAvatar user={user} className="profile-dropdown-avatar" />
                     <div>
                       <strong>{user.name}</strong>
-                      <span>{user.email}</span>
-                      <small>{user.roles.join(", ")}</small>
+                      <span>{t(adminRoleLabel)}</span>
+                      <small>{user.email}</small>
                     </div>
                   </div>
                   <div className="profile-dropdown-actions">
-                    <button className="profile-menu-button" onClick={() => goLearner("profile")} role="menuitem" type="button">
-                      <UserRound size={16} />
+                    <button className="profile-menu-button" onClick={() => goAdminSection("overview")} role="menuitem" type="button">
+                      <span className="profile-menu-icon"><Gauge size={16} /></span>
                       <span className="profile-menu-copy">
-                        <strong>{t("Account")}</strong>
-                        <small>{t("Profile and settings")}</small>
+                        <strong>{t("Admin panel")}</strong>
+                        <small>{t("Open management overview.")}</small>
                       </span>
+                      <ArrowRight size={14} />
                     </button>
-                    <button className="profile-menu-button" onClick={() => goLearner("saved-tests")} role="menuitem" type="button">
-                      <Bookmark size={16} />
-                      <span className="profile-menu-copy">
-                        <strong>{t("Saved tests")}</strong>
-                        <small>{t("Review saved questions and templates.")}</small>
-                      </span>
-                    </button>
-                    <button className="profile-menu-button" onClick={() => goLearner("ai")} role="menuitem" type="button">
-                      <Bot size={16} />
-                      <span className="profile-menu-copy">
-                        <strong>{t("AI help")}</strong>
-                        <small>{t("Analyze hard questions with AI tutor.")}</small>
-                      </span>
-                    </button>
+                    {canUsers && (
+                      <button className="profile-menu-button" onClick={() => goAdminSection("users")} role="menuitem" type="button">
+                        <span className="profile-menu-icon"><Users size={16} /></span>
+                        <span className="profile-menu-copy">
+                          <strong>{t("Users")}</strong>
+                          <small>{t("Manage accounts and roles.")}</small>
+                        </span>
+                        <ArrowRight size={14} />
+                      </button>
+                    )}
+                    {canReports && (
+                      <button className="profile-menu-button" onClick={() => goAdminSection("reports")} role="menuitem" type="button">
+                        <span className="profile-menu-icon"><BarChart3 size={16} /></span>
+                        <span className="profile-menu-copy">
+                          <strong>{t("Reports")}</strong>
+                          <small>{t("Open reports and progress analytics.")}</small>
+                        </span>
+                        <ArrowRight size={14} />
+                      </button>
+                    )}
+                    {canCatalog && (
+                      <button className="profile-menu-button" onClick={() => goAdminSection("lessons")} role="menuitem" type="button">
+                        <span className="profile-menu-icon"><BookOpen size={16} /></span>
+                        <span className="profile-menu-copy">
+                          <strong>{t("Catalog CMS")}</strong>
+                          <small>{t("Edit catalog content.")}</small>
+                        </span>
+                        <ArrowRight size={14} />
+                      </button>
+                    )}
                   </div>
                   <div className="profile-dropdown-footer">
+                    <button className="profile-menu-button" onClick={() => goLearner("home")} role="menuitem" type="button">
+                      <span className="profile-menu-icon"><GraduationCap size={16} /></span>
+                      <span className="profile-menu-copy">
+                        <strong>{t("Learner app")}</strong>
+                        <small>{t("Switch to learner dashboard.")}</small>
+                      </span>
+                      <ArrowRight size={14} />
+                    </button>
                     <button className="profile-menu-button logout" onClick={() => { setProfileOpen(false); onLogout(); }} role="menuitem" type="button">
-                      <LogOut size={16} />
+                      <span className="profile-menu-icon"><LogOut size={16} /></span>
                       <span className="profile-menu-copy">
                         <strong>{t("Logout")}</strong>
                         <small>{t("Return to login page")}</small>
@@ -682,6 +1096,9 @@ export function AdminShell({
                 </div>
               )}
             </div>
+            <button className="ai-button admin-ai-button" onClick={() => goLearner("ai")} type="button">
+              <Bot size={18} /> AI
+            </button>
           </div>
         </header>
         <section className="admin-page-heading">
@@ -836,7 +1253,7 @@ function UsersSection() {
         setUsers(nextUsers);
         setRoles(nextRoles);
       })
-      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Failed to load users"))
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : t("Failed to load users")))
       .finally(() => setLoading(false));
   }, []);
 
@@ -850,11 +1267,11 @@ function UsersSection() {
 
   const save = async () => {
     if (!draft?.name || !draft.email) {
-      setError("Name and email are required.");
+      setError(t("Name and email are required."));
       return;
     }
     if (!draft.id && !draft.password) {
-      setError("Password is required for new users.");
+      setError(t("Password is required for new users."));
       return;
     }
     setSaving(true);
@@ -865,7 +1282,7 @@ function UsersSection() {
       setDraft(null);
       load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save user");
+      setError(saveError instanceof Error ? saveError.message : t("Failed to save user"));
     } finally {
       setSaving(false);
     }
@@ -880,10 +1297,35 @@ function UsersSection() {
       setDraft(null);
       load();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete user");
+      setError(deleteError instanceof Error ? deleteError.message : t("Failed to delete user"));
     } finally {
       setSaving(false);
     }
+  };
+
+  const roleMeta = (role: AdminRole) => {
+    if (role.key === "super_admin") {
+      return {
+        title: t("Super admin"),
+        detail: t("Full platform access"),
+        chips: [t("Users"), t("Catalog"), t("Reports"), "RBAC"],
+        Icon: Crown,
+      };
+    }
+    if (role.key === "admin") {
+      return {
+        title: t("Admin"),
+        detail: t("Manage operations and content"),
+        chips: [t("Users"), t("Catalog"), t("Reports")],
+        Icon: Shield,
+      };
+    }
+    return {
+      title: t("Student"),
+      detail: t("Learner workspace access"),
+      chips: [t("Lessons"), t("Tests"), t("Progress")],
+      Icon: GraduationCap,
+    };
   };
 
   return (
@@ -901,7 +1343,7 @@ function UsersSection() {
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
-              <tr><th>ID</th><th>Name</th><th>Email</th><th>Roles</th><th>Status</th></tr>
+              <tr><th>{t("ID")}</th><th>{t("Name")}</th><th>{t("Email")}</th><th>{t("Roles")}</th><th>{t("Status")}</th></tr>
             </thead>
             <tbody>
               {filtered.map((item) => (
@@ -910,7 +1352,7 @@ function UsersSection() {
                   <td>{item.name}</td>
                   <td>{item.email}</td>
                   <td>{item.roles.join(", ")}</td>
-                  <td><span className={`admin-status ${normalizeActive(item.active) ? "active" : "muted"}`}>{normalizeActive(item.active) ? "Active" : "Inactive"}</span></td>
+                  <td><span className={`admin-status ${normalizeActive(item.active) ? "active" : "muted"}`}>{t(normalizeActive(item.active) ? "Active" : "Inactive")}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -927,7 +1369,7 @@ function UsersSection() {
           onSave={save}
         >
           <AdminInput label={t("Name")} value={draft.name || ""} onChange={(value) => setDraft({ ...draft, name: value })} required />
-          <AdminInput label="Email" value={draft.email || ""} onChange={(value) => setDraft({ ...draft, email: value })} required />
+          <AdminInput label={t("Email")} value={draft.email || ""} onChange={(value) => setDraft({ ...draft, email: value })} required />
           <AdminInput label={draft.id ? t("New password") : t("Password")} value={draft.password || ""} onChange={(value) => setDraft({ ...draft, password: value })} required={!draft.id} />
           <label className="admin-check-row">
             <input checked={normalizeActive(draft.active ?? true)} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} type="checkbox" />
@@ -936,10 +1378,14 @@ function UsersSection() {
           <div className="admin-field">
             <span>{t("Roles")}</span>
             <div className="admin-role-grid">
-              {roles.map((role) => (
-                <label key={role.key}>
+              {roles.map((role) => {
+                const selected = (draft.roles || []).includes(role.key);
+                const meta = roleMeta(role);
+                const RoleIcon = meta.Icon;
+                return (
+                <label className={`admin-role-card ${selected ? "selected" : ""}`} key={role.key}>
                   <input
-                    checked={(draft.roles || []).includes(role.key)}
+                    checked={selected}
                     onChange={(event) => {
                       const current = draft.roles || [];
                       setDraft({
@@ -949,9 +1395,17 @@ function UsersSection() {
                     }}
                     type="checkbox"
                   />
-                  {role.key}
+                  <span className="admin-role-card-icon"><RoleIcon size={18} /></span>
+                  <span className="admin-role-card-copy">
+                    <strong>{meta.title}</strong>
+                    <small>{meta.detail}</small>
+                    <span className="admin-role-chip-row">
+                      {meta.chips.map((chip) => <em key={chip}>{chip}</em>)}
+                    </span>
+                  </span>
+                  <span className="admin-role-check"><Check size={16} /></span>
                 </label>
-              ))}
+              );})}
             </div>
           </div>
         </AdminDrawer>
@@ -979,7 +1433,7 @@ function ReportsSection() {
         setReport(nextReport);
         setUsers(nextUsers);
       })
-      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Failed to load reports"))
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : t("Failed to load reports")))
       .finally(() => setLoading(false));
   }, [selectedUser]);
 
@@ -999,7 +1453,7 @@ function ReportsSection() {
     <section className="admin-panel">
       <div className="admin-report-toolbar">
         <div>
-          <h2>Reports</h2>
+          <h2>{t("Reports")}</h2>
           <p>{t("Progress, attempts, saved questions, and AI usage.")}</p>
         </div>
         <div>
@@ -1023,7 +1477,7 @@ function ReportsSection() {
           </div>
           <div className="admin-table-wrap">
             <table className="admin-table">
-              <thead><tr><th>Mode / template</th><th>Attempts</th><th>Best percent</th></tr></thead>
+              <thead><tr><th>{t("Mode / template")}</th><th>{t("Attempts")}</th><th>{t("Best percent")}</th></tr></thead>
               <tbody>
                 {(report?.byTemplate || []).map((item) => (
                   <tr key={item.mode}>
@@ -1056,7 +1510,7 @@ function CatalogSection({ config, onCatalogChanged }: { config: ResourceConfig; 
     setError("");
     adminListCatalog(config.section)
       .then(setItems)
-      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : `Failed to load ${config.plural}`))
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : `${t("Failed to load records")}: ${t(config.plural)}`))
       .finally(() => setLoading(false));
   }, [config]);
 
@@ -1085,7 +1539,7 @@ function CatalogSection({ config, onCatalogChanged }: { config: ResourceConfig; 
       onCatalogChanged();
       load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : `Failed to save ${config.label}`);
+      setError(saveError instanceof Error ? saveError.message : `${t("Failed to save record")}: ${t(config.label)}`);
     } finally {
       setSaving(false);
     }
@@ -1101,7 +1555,7 @@ function CatalogSection({ config, onCatalogChanged }: { config: ResourceConfig; 
       onCatalogChanged();
       load();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : `Failed to delete ${config.label}`);
+      setError(deleteError instanceof Error ? deleteError.message : `${t("Failed to delete record")}: ${t(config.label)}`);
     } finally {
       setSaving(false);
     }
@@ -1122,7 +1576,7 @@ function CatalogSection({ config, onCatalogChanged }: { config: ResourceConfig; 
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
-              <tr>{config.columns.map((column) => <th key={column}>{column}</th>)}</tr>
+              <tr>{config.columns.map((column) => <th key={column}>{t(column)}</th>)}</tr>
             </thead>
             <tbody>
               {filtered.map((item) => (
@@ -1299,7 +1753,7 @@ function CatalogField({
         <textarea
           value={field.type === "string-list" && Array.isArray(value) ? value.join("\n") : String(value || "")}
           onChange={(event) => setItem({ ...item, [field.key]: event.target.value })}
-          placeholder={field.placeholder}
+          placeholder={field.placeholder ? t(field.placeholder) : undefined}
         />
       </label>
     );
@@ -1311,7 +1765,7 @@ function CatalogField({
       type={field.type === "number" ? "number" : "text"}
       value={String(value ?? "")}
       onChange={(next) => setItem({ ...item, [field.key]: next })}
-      placeholder={field.placeholder}
+      placeholder={field.placeholder ? t(field.placeholder) : undefined}
     />
   );
 }

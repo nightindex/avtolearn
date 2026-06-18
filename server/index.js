@@ -412,7 +412,12 @@ function runMigrations(database) {
           FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_template_questions_template ON template_questions(template_id, position);
-      `,
+        `,
+    },
+    {
+      version: 4,
+      name: "user_profile_settings",
+      sql: "SELECT 1;",
     },
   ];
 
@@ -433,6 +438,9 @@ function runMigrations(database) {
   ensureColumn(database, "ai_history", "user_id", "INTEGER");
   ensureColumn(database, "ai_history", "model", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(database, "ai_history", "sources", "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(database, "users", "avatar_url", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(database, "users", "avatar_color", "TEXT NOT NULL DEFAULT '#1477d4'");
+  ensureColumn(database, "users", "avatar_size", "INTEGER NOT NULL DEFAULT 52");
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_question_progress_user_created ON question_progress(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_test_attempts_user_created ON test_attempts(user_id, created_at);
@@ -660,7 +668,7 @@ function getSessionUser(req) {
   if (!token) return null;
   const row = db
     .prepare(
-      `SELECT s.id AS session_id, s.expires_at, u.id, u.email, u.name, u.active
+      `SELECT s.id AS session_id, s.expires_at, u.id, u.email, u.name, u.active, u.avatar_url, u.avatar_color, u.avatar_size
        FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ?`,
     )
@@ -682,7 +690,7 @@ function getSessionUser(req) {
     )
     .all(row.id)
     .map((permission) => permission.key);
-  return { id: row.id, email: row.email, name: row.name, roles, permissions };
+  return { id: row.id, email: row.email, name: row.name, avatar_url: row.avatar_url, avatar_color: row.avatar_color, avatar_size: row.avatar_size, roles, permissions };
 }
 
 function requireUser(context) {
@@ -882,7 +890,16 @@ function penaltyInfo() {
 }
 
 function userDto(user) {
-  return { id: user.id, email: user.email, name: user.name, roles: user.roles || [], permissions: user.permissions || [] };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatarUrl: user.avatar_url || "",
+    avatarColor: user.avatar_color || "#1477d4",
+    avatarSize: Number(user.avatar_size || 52),
+    roles: user.roles || [],
+    permissions: user.permissions || [],
+  };
 }
 
 function buildTemplates(userId) {
@@ -1129,11 +1146,47 @@ async function handleAuth(req, res, context, url) {
     json(res, 200, { user: userDto(context.user) });
     return true;
   }
+  if (req.method === "PATCH" && url.pathname === "/api/auth/profile") {
+    const user = requireUser(context);
+    const payload = await readBody(req);
+    const existing = getUserById(user.id);
+    if (!existing) throw httpError(404, "User not found");
+
+    const nextEmail = String(payload.email ?? existing.email).trim();
+    const nextName = String(payload.name ?? existing.name).trim();
+    if (!nextName) throw httpError(400, "Name is required");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) throw httpError(400, "Valid email is required");
+
+    const duplicate = db.prepare("SELECT id FROM users WHERE lower(email) = lower(?) AND id <> ?").get(nextEmail, user.id);
+    if (duplicate) throw httpError(409, "Email is already used");
+
+    const avatarUrl = String(payload.avatarUrl ?? existing.avatar_url ?? "").trim();
+    const avatarColorInput = String(payload.avatarColor ?? existing.avatar_color ?? "#1477d4").trim();
+    const avatarColor = /^#[0-9a-f]{6}$/i.test(avatarColorInput) ? avatarColorInput : "#1477d4";
+    const avatarSize = Math.min(96, Math.max(36, Number(payload.avatarSize ?? existing.avatar_size ?? 52)));
+
+    db.prepare("UPDATE users SET email = ?, name = ?, avatar_url = ?, avatar_color = ?, avatar_size = ?, updated_at = ? WHERE id = ?").run(
+      nextEmail,
+      nextName,
+      avatarUrl,
+      avatarColor,
+      avatarSize,
+      new Date().toISOString(),
+      user.id,
+    );
+    if (payload.password) {
+      const password = String(payload.password);
+      if (password.length < 6) throw httpError(400, "Password must contain at least 6 characters");
+      db.prepare("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?").run(hashPassword(password), new Date().toISOString(), user.id);
+    }
+    json(res, 200, { user: userDto(getUserById(user.id)) });
+    return true;
+  }
   return false;
 }
 
 function getUserById(id) {
-  const user = db.prepare("SELECT id, email, name, active FROM users WHERE id = ?").get(Number(id));
+  const user = db.prepare("SELECT id, email, name, active, avatar_url, avatar_color, avatar_size FROM users WHERE id = ?").get(Number(id));
   if (!user) return null;
   const roles = db.prepare("SELECT r.key FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?").all(user.id).map((row) => row.key);
   const permissions = db
@@ -1150,7 +1203,7 @@ function getUserById(id) {
 
 function adminUsers(payload, method, id) {
   if (method === "GET" && !id) {
-    return db.prepare("SELECT id, email, name, active, created_at, updated_at FROM users ORDER BY id").all().map((user) => ({ ...user, roles: getUserById(user.id).roles }));
+    return db.prepare("SELECT id, email, name, active, avatar_url, avatar_color, avatar_size, created_at, updated_at FROM users ORDER BY id").all().map((user) => ({ ...user, roles: getUserById(user.id).roles }));
   }
   if (method === "POST") {
     requireFields(payload, ["email", "name", "password"]);
@@ -1169,10 +1222,13 @@ function adminUsers(payload, method, id) {
   if (method === "PATCH" && id) {
     const existing = getUserById(id);
     if (!existing) throw httpError(404, "User not found");
-    db.prepare("UPDATE users SET email = ?, name = ?, active = ?, updated_at = ? WHERE id = ?").run(
+    db.prepare("UPDATE users SET email = ?, name = ?, active = ?, avatar_url = ?, avatar_color = ?, avatar_size = ?, updated_at = ? WHERE id = ?").run(
       payload.email || existing.email,
       payload.name || existing.name,
       payload.active === undefined ? existing.active : payload.active ? 1 : 0,
+      payload.avatarUrl ?? payload.avatar_url ?? existing.avatar_url ?? "",
+      payload.avatarColor ?? payload.avatar_color ?? existing.avatar_color ?? "#1477d4",
+      Math.min(96, Math.max(36, Number(payload.avatarSize ?? payload.avatar_size ?? existing.avatar_size ?? 52))),
       new Date().toISOString(),
       Number(id),
     );

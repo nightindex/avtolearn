@@ -16,6 +16,9 @@ export type AuthUser = {
   id: number;
   email: string;
   name: string;
+  avatarUrl?: string;
+  avatarColor?: string;
+  avatarSize?: number;
   roles: string[];
   permissions: string[];
 };
@@ -39,6 +42,27 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const response = await fetch("/api/auth/me");
   if (response.status === 401) return null;
   if (!response.ok) throw new Error("Failed to load current user");
+  const payload = await response.json() as { user: AuthUser };
+  return payload.user;
+}
+
+export async function updateProfile(input: {
+  name: string;
+  email: string;
+  password?: string;
+  avatarUrl?: string;
+  avatarColor?: string;
+  avatarSize?: number;
+}): Promise<AuthUser> {
+  const response = await fetch("/api/auth/profile", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(payload?.error || "Profilni yangilab bo'lmadi.");
+  }
   const payload = await response.json() as { user: AuthUser };
   return payload.user;
 }

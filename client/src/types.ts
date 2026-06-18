@@ -160,6 +160,12 @@ export type AdminUser = {
   name: string;
   active: number | boolean;
   roles: string[];
+  avatarUrl?: string;
+  avatar_url?: string;
+  avatarColor?: string;
+  avatar_color?: string;
+  avatarSize?: number;
+  avatar_size?: number;
   permissions?: string[];
   created_at?: string;
   updated_at?: string;

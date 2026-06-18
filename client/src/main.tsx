@@ -47,12 +47,13 @@ import {
   Timer,
   Trophy,
   Trash2,
+  UserRound,
   Video,
   Volume2,
   WalletCards,
   X,
 } from "lucide-react";
-import { askTutor, getCurrentUser, getData, getProgressSummary, getQuestions, getRecentProgress, getSavedQuestions, getTemplates, login, logout as logoutApi, saveQuestion, saveQuestionProgress, saveTemplate, saveTestAttempt, type AuthUser } from "./api";
+import { askTutor, getCurrentUser, getData, getProgressSummary, getQuestions, getRecentProgress, getSavedQuestions, getTemplates, login, logout as logoutApi, saveQuestion, saveQuestionProgress, saveTemplate, saveTestAttempt, updateProfile, type AuthUser } from "./api";
 import type { AppData, Penalty, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate, Topic } from "./types";
 import "./styles.css";
 import { Dashboard } from "./components/Dashboard";
@@ -208,6 +209,29 @@ function userInitials(user: AuthUser | null) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "U";
+}
+
+function avatarColor(user: AuthUser | null) {
+  return user?.avatarColor || "#1477d4";
+}
+
+function avatarSize(user: AuthUser | null, fallback = 52) {
+  return Math.min(96, Math.max(32, Number(user?.avatarSize || fallback)));
+}
+
+function UserAvatar({ user, className = "", size }: { user: AuthUser | null; className?: string; size?: number }) {
+  const resolvedSize = size ?? avatarSize(user);
+  const hasImage = Boolean(user?.avatarUrl?.trim());
+  const style = {
+    "--avatar-color": avatarColor(user),
+    "--avatar-size": `${resolvedSize}px`,
+  } as React.CSSProperties;
+  return (
+    <span className={`user-avatar ${hasImage ? "has-image" : "no-image"} ${className}`} style={style}>
+      <span>{userInitials(user)}</span>
+      {hasImage && <img alt="" src={user?.avatarUrl} onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.closest(".user-avatar")?.classList.add("no-image"); }} />}
+    </span>
+  );
 }
 
 function routeFromPath(pathname = window.location.pathname): { workspace: "admin"; section: AdminSection } | { workspace: "learner"; view: Exclude<View, "admin"> } {
@@ -504,6 +528,19 @@ function App() {
     setView("home");
   };
 
+  const saveCurrentProfile = async (input: {
+    name: string;
+    email: string;
+    password?: string;
+    avatarUrl?: string;
+    avatarColor?: string;
+    avatarSize?: number;
+  }) => {
+    const user = await updateProfile(input);
+    setCurrentUser(user);
+    return user;
+  };
+
   const logout = () => {
     logoutApi().catch(console.error);
     localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -604,6 +641,7 @@ function App() {
           darkMode={darkMode}
           language={language}
           currentUser={currentUser}
+          onProfileUpdate={saveCurrentProfile}
           openTutor={() => setTutorOpen(true)}
           setView={navigateTo}
         />
@@ -889,6 +927,9 @@ function Topbar({
       email: currentUser.email,
       role: roleLabel(currentUser),
       initials: userInitials(currentUser),
+      avatarUrl: currentUser.avatarUrl,
+      avatarColor: currentUser.avatarColor,
+      avatarSize: currentUser.avatarSize,
     }
     : profileUser;
   const hasAdminAccess = canUseAdmin(currentUser);
@@ -939,7 +980,7 @@ function Topbar({
         {hasAdminAccess && (
           <button className="workspace-switcher" onClick={() => setView("admin")} type="button">
             <ShieldCheck size={17} />
-            <span>Admin</span>
+            <span>{translateUi("Admin", language)}</span>
           </button>
         )}
         <button
@@ -1001,14 +1042,14 @@ function Topbar({
             onClick={() => setProfileOpen((open) => !open)}
             type="button"
           >
-            <span className="avatar">{displayUser.initials}</span>
+            <UserAvatar user={currentUser} className="avatar" size={34} />
             <span className="profile-trigger-name">{displayUser.name}</span>
             <ChevronDown className="profile-trigger-chevron" size={15} />
           </button>
           {profileOpen && (
             <div className="topbar-dropdown profile-dropdown" role="menu">
               <div className="profile-dropdown-summary">
-                <span className="profile-dropdown-avatar">{displayUser.initials}</span>
+                <UserAvatar user={currentUser} className="profile-dropdown-avatar" />
                 <div>
                   <strong>{displayUser.name}</strong>
                   <span>{translateUi(displayUser.role, language)}</span>
@@ -1017,6 +1058,7 @@ function Topbar({
               </div>
               <div className="profile-dropdown-actions">
                 <button className="profile-menu-button" onClick={openProfileView} type="button">
+                  <span className="profile-menu-icon"><UserRound size={16} /></span>
                   <span className="profile-menu-copy">
                     <strong>{translateUi("Hisob", language)}</strong>
                     <small>{translateUi("Profil va sozlamalar", language)}</small>
@@ -1024,6 +1066,7 @@ function Topbar({
                   <ArrowRight size={14} />
                 </button>
                 <button className="profile-menu-button" onClick={() => { setProfileOpen(false); setView("saved-tests"); }} type="button">
+                  <span className="profile-menu-icon"><Bookmark size={16} /></span>
                   <span className="profile-menu-copy">
                     <strong>{translateUi("Saqlangan testlar", language)}</strong>
                     <small>{translateUi("Saqlangan savollar va shablonlarni qayta ko'ring.", language)}</small>
@@ -1031,6 +1074,7 @@ function Topbar({
                   <ArrowRight size={14} />
                 </button>
                 <button className="profile-menu-button" onClick={() => { setProfileOpen(false); openTutor(); }} type="button">
+                  <span className="profile-menu-icon"><Bot size={16} /></span>
                   <span className="profile-menu-copy">
                     <strong>{translateUi("AI yordam", language)}</strong>
                     <small>{translateUi("AI tutor bilan qiyin savollarni tahlil qiling.", language)}</small>
@@ -1040,11 +1084,11 @@ function Topbar({
               </div>
               <div className="profile-dropdown-footer">
                 <button className="profile-menu-button logout" onClick={() => { setProfileOpen(false); onLogout(); }} type="button">
+                  <span className="profile-menu-icon"><LogOut size={16} /></span>
                   <span className="profile-menu-copy">
                     <strong>{translateUi("Chiqish", language)}</strong>
                     <small>{translateUi("Login sahifasiga qaytish", language)}</small>
                   </span>
-                  <LogOut size={14} />
                 </button>
               </div>
             </div>
@@ -1163,6 +1207,7 @@ function ProfilePage({
   darkMode,
   language,
   currentUser,
+  onProfileUpdate,
   openTutor,
   setView,
 }: {
@@ -1172,6 +1217,7 @@ function ProfilePage({
   darkMode: boolean;
   language: AppLanguage;
   currentUser: AuthUser | null;
+  onProfileUpdate: (input: { name: string; email: string; password?: string; avatarUrl?: string; avatarColor?: string; avatarSize?: number }) => Promise<AuthUser>;
   openTutor: () => void;
   setView: (view: View) => void;
 }) {
@@ -1184,6 +1230,53 @@ function ProfilePage({
   const displayEmail = currentUser?.email || profileUser.email;
   const displayRole = roleLabel(currentUser);
   const displayInitials = userInitials(currentUser);
+  const [profileDraft, setProfileDraft] = useState({
+    name: displayName,
+    email: displayEmail,
+    password: "",
+    avatarUrl: currentUser?.avatarUrl || "",
+    avatarColor: avatarColor(currentUser),
+    avatarSize: avatarSize(currentUser),
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
+
+  useEffect(() => {
+    setProfileDraft({
+      name: displayName,
+      email: displayEmail,
+      password: "",
+      avatarUrl: currentUser?.avatarUrl || "",
+      avatarColor: avatarColor(currentUser),
+      avatarSize: avatarSize(currentUser),
+    });
+  }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.avatarUrl, currentUser?.avatarColor, currentUser?.avatarSize]);
+
+  const previewUser: AuthUser | null = currentUser
+    ? { ...currentUser, name: profileDraft.name, email: profileDraft.email, avatarUrl: profileDraft.avatarUrl, avatarColor: profileDraft.avatarColor, avatarSize: profileDraft.avatarSize }
+    : null;
+
+  async function submitProfile(event: React.FormEvent) {
+    event.preventDefault();
+    setProfileSaving(true);
+    setProfileMessage("");
+    try {
+      await onProfileUpdate({
+        name: profileDraft.name.trim(),
+        email: profileDraft.email.trim(),
+        password: profileDraft.password.trim() || undefined,
+        avatarUrl: profileDraft.avatarUrl.trim(),
+        avatarColor: profileDraft.avatarColor,
+        avatarSize: profileDraft.avatarSize,
+      });
+      setProfileDraft((draft) => ({ ...draft, password: "" }));
+      setProfileMessage(translateUi("Profil yangilandi", language));
+    } catch (error) {
+      setProfileMessage(error instanceof Error ? error.message : translateUi("Profilni yangilab bo'lmadi", language));
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   const metrics = [
     { label: "Javoblar", value: String(answered), tone: "blue" },
@@ -1221,7 +1314,7 @@ function ProfilePage({
 
       <section className="profile-overview">
         <article className="card profile-identity-card">
-          <div className="profile-identity-avatar">{displayInitials}</div>
+          <UserAvatar user={currentUser} className="profile-identity-avatar" size={avatarSize(currentUser, 72)} />
           <div className="profile-identity-copy">
             <span>{translateUi("Profil", language)}</span>
             <h2>{displayName}</h2>
@@ -1262,6 +1355,57 @@ function ProfilePage({
             <div><dt>{translateUi("Rol", language)}</dt><dd>{translateUi(displayRole, language)}</dd></div>
             <div><dt>Email</dt><dd>{displayEmail}</dd></div>
           </dl>
+        </article>
+
+        <article className="card profile-section profile-editor-card">
+          <div className="profile-section-head">
+            <h2>{translateUi("Profilni tahrirlash", language)}</h2>
+            <span className="dashboard-pill">{profileDraft.avatarSize}px</span>
+          </div>
+          <form className="profile-editor-form" onSubmit={submitProfile}>
+            <div className="profile-avatar-editor">
+              <UserAvatar user={previewUser} className="profile-editor-avatar" size={profileDraft.avatarSize} />
+              <div>
+                <strong>{profileDraft.name || displayName}</strong>
+                <span>{translateUi("Avatar rangi va o'lchamini sozlang", language)}</span>
+              </div>
+            </div>
+            <label>
+              <span>{translateUi("F.I.Sh.", language)}</span>
+              <input value={profileDraft.name} onChange={(event) => setProfileDraft({ ...profileDraft, name: event.target.value })} required />
+            </label>
+            <label>
+              <span>Email</span>
+              <input type="email" value={profileDraft.email} onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })} required />
+            </label>
+            <label>
+              <span>{translateUi("Avatar rasmi URL", language)}</span>
+              <input value={profileDraft.avatarUrl} onChange={(event) => setProfileDraft({ ...profileDraft, avatarUrl: event.target.value })} placeholder="https://..." />
+            </label>
+            <div className="profile-editor-row">
+              <label>
+                <span>{translateUi("Avatar rangi", language)}</span>
+                <input type="color" value={profileDraft.avatarColor} onChange={(event) => setProfileDraft({ ...profileDraft, avatarColor: event.target.value })} />
+              </label>
+              <label>
+                <span>{translateUi("Avatar o'lchami", language)}</span>
+                <input min="36" max="96" type="range" value={profileDraft.avatarSize} onChange={(event) => setProfileDraft({ ...profileDraft, avatarSize: Number(event.target.value) })} />
+              </label>
+            </div>
+            <label>
+              <span>{translateUi("Yangi parol", language)}</span>
+              <input type="password" value={profileDraft.password} onChange={(event) => setProfileDraft({ ...profileDraft, password: event.target.value })} placeholder={translateUi("O'zgartirmaslik uchun bo'sh qoldiring", language)} />
+            </label>
+            {profileMessage && <p className="profile-editor-message">{profileMessage}</p>}
+            <div className="profile-editor-actions">
+              <button className="ghost-button" type="button" onClick={() => setProfileDraft({ name: displayName, email: displayEmail, password: "", avatarUrl: currentUser?.avatarUrl || "", avatarColor: avatarColor(currentUser), avatarSize: avatarSize(currentUser) })}>
+                {translateUi("Bekor qilish", language)}
+              </button>
+              <button className="primary-button" disabled={profileSaving} type="submit">
+                <Save size={16} /> {profileSaving ? translateUi("Saqlanmoqda", language) : translateUi("Saqlash", language)}
+              </button>
+            </div>
+          </form>
         </article>
 
         <article className="card profile-section">
@@ -3780,10 +3924,12 @@ function FinalExamPage({
   onStart: (config: RandomTestConfig) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [faceVerified, setFaceVerified] = useState(false);
+  const [faceInFrame, setFaceInFrame] = useState<boolean | null>(null);
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
   const answered = summary?.answered ?? 0;
@@ -3810,6 +3956,7 @@ function FinalExamPage({
       streamRef.current = stream;
       setCameraActive(true);
       setFaceVerified(false);
+      setFaceInFrame(null);
       setCapturedAt(null);
     } catch {
       setCameraError("Kameraga ruxsat berilmadi yoki kamera topilmadi.");
@@ -3817,10 +3964,61 @@ function FinalExamPage({
   }
 
   function captureFace() {
-    if (!cameraActive) return;
+    if (!cameraActive || faceInFrame === false) return;
     setCapturedAt(new Date().toLocaleString("uz-UZ", { hour12: false }));
     setFaceVerified(true);
     setCameraError("");
+  }
+
+  function analyzeFacePositionFallback(video: HTMLVideoElement) {
+    const canvas = detectionCanvasRef.current ?? document.createElement("canvas");
+    detectionCanvasRef.current = canvas;
+    const width = 160;
+    const height = 100;
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return null;
+
+    context.drawImage(video, 0, 0, width, height);
+    const pixels = context.getImageData(0, 0, width, height).data;
+    let totalMass = 0;
+    let ovalMass = 0;
+    let weightedX = 0;
+    let weightedY = 0;
+
+    for (let y = 0; y < height; y += 2) {
+      for (let x = 0; x < width; x += 2) {
+        const index = (y * width + x) * 4;
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        const luminance = red * 0.299 + green * 0.587 + blue * 0.114;
+        const maxChannel = Math.max(red, green, blue);
+        const minChannel = Math.min(red, green, blue);
+        const isSkinLike = red > 62 && green > 34 && blue > 18 && red > blue * 1.08 && maxChannel - minChannel > 14;
+        const isHairOrFaceShadow = luminance < 92 && maxChannel - minChannel > 8;
+        if (!isSkinLike && !isHairOrFaceShadow) continue;
+
+        const nx = x / width;
+        const ny = y / height;
+        const inOval = (((nx - 0.5) / 0.2) ** 2) + (((ny - 0.47) / 0.36) ** 2) <= 1;
+        const weight = isSkinLike ? 1.25 : 1;
+        totalMass += weight;
+        weightedX += nx * weight;
+        weightedY += ny * weight;
+        if (inOval) ovalMass += weight;
+      }
+    }
+
+    if (totalMass < 85) return null;
+    const centerX = weightedX / totalMass;
+    const centerY = weightedY / totalMass;
+    const ovalShare = ovalMass / totalMass;
+    const centered = centerX > 0.36 && centerX < 0.64 && centerY > 0.18 && centerY < 0.76;
+    if (centered && ovalShare > 0.38) return true;
+    if (ovalShare < 0.25 || centerX < 0.28 || centerX > 0.72 || centerY < 0.1 || centerY > 0.86) return false;
+    return null;
   }
 
   function startFinalExam() {
@@ -3849,6 +4047,52 @@ function FinalExamPage({
   }, [cameraActive]);
 
   useEffect(() => {
+    if (!cameraActive || faceVerified || !videoRef.current) {
+      setFaceInFrame(null);
+      return;
+    }
+
+    let cancelled = false;
+    const FaceDetectorCtor = (window as typeof window & { FaceDetector?: new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => { detect: (source: HTMLVideoElement) => Promise<Array<{ boundingBox: DOMRectReadOnly }>> } }).FaceDetector;
+    const detector = FaceDetectorCtor ? new FaceDetectorCtor({ fastMode: true, maxDetectedFaces: 1 }) : null;
+    const timer = window.setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+
+      if (!detector) {
+        setFaceInFrame(analyzeFacePositionFallback(video));
+        return;
+      }
+
+      detector.detect(video)
+        .then((faces) => {
+          if (cancelled) return;
+          const face = faces[0]?.boundingBox;
+          if (!face) {
+            setFaceInFrame(analyzeFacePositionFallback(video));
+            return;
+          }
+
+          const centerX = (face.x + face.width / 2) / video.videoWidth;
+          const centerY = (face.y + face.height / 2) / video.videoHeight;
+          const widthRatio = face.width / video.videoWidth;
+          const heightRatio = face.height / video.videoHeight;
+          const centeredInOval = centerX > 0.34 && centerX < 0.66 && centerY > 0.18 && centerY < 0.76;
+          const usefulSize = widthRatio > 0.08 && widthRatio < 0.62 && heightRatio > 0.12 && heightRatio < 0.86;
+          setFaceInFrame(centeredInOval && usefulSize);
+        })
+        .catch(() => {
+          if (!cancelled) setFaceInFrame(analyzeFacePositionFallback(video));
+        });
+    }, 650);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [cameraActive, faceVerified]);
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Enter" && cameraActive && !faceVerified) {
         event.preventDefault();
@@ -3857,7 +4101,7 @@ function FinalExamPage({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cameraActive, faceVerified]);
+  }, [cameraActive, faceVerified, faceInFrame]);
 
   return (
     <div className="page-shell final-exam-page">
@@ -3954,7 +4198,7 @@ function FinalExamPage({
         <aside className="final-camera-column">
           <section className="final-camera-card">
             <h2><Video size={18} /> Yuzni tekshirish paneli</h2>
-            <div className={`final-camera-preview ${cameraActive ? "active" : ""} ${faceVerified ? "verified" : ""}`}>
+            <div className={`final-camera-preview ${cameraActive ? "active" : ""} ${faceInFrame ? "face-in-frame" : ""} ${faceInFrame === false ? "face-out-frame" : ""} ${faceVerified ? "verified" : ""}`}>
               {cameraActive ? (
                 <video ref={videoRef} muted playsInline />
               ) : (
@@ -3970,12 +4214,16 @@ function FinalExamPage({
               <p>
                 {faceVerified
                   ? `Tasdiqlash vaqti: ${capturedAt}`
+                  : faceInFrame === false
+                    ? "Yuzingizni oval markaziga yaqinroq joylashtiring."
                   : cameraActive
                     ? "Yuzingizni ramka ichida tuting va rasmga olish tugmasini bosing."
                     : "Davlat terminali xavfsizlik talablariga mos tarzda ishlash uchun real kamerangizni yoqing."}
               </p>
-              {cameraError && <em>{cameraError}</em>}
-              <button onClick={startCamera} type="button">{cameraActive ? "Kamerani qayta ishga tushirish" : "Kamerani ishga tushirish"}</button>
+              {(cameraError || (faceInFrame === false ? "Yuzingizni oval markaziga yaqinroq joylashtiring." : "")) && (
+                <em>{cameraError || "Yuzingizni oval markaziga yaqinroq joylashtiring."}</em>
+              )}
+              {!cameraActive && <button onClick={startCamera} type="button">Kamerani ishga tushirish</button>}
             </div>
           </section>
 
@@ -3989,7 +4237,7 @@ function FinalExamPage({
             </ul>
           </section>
 
-          <button className={`final-disabled-action ${cameraActive && !faceVerified ? "ready" : ""}`} disabled={!cameraActive || faceVerified} onClick={captureFace} type="button">
+          <button className={`final-disabled-action ${cameraActive && !faceVerified && faceInFrame !== false ? "ready" : ""}`} disabled={!cameraActive || faceVerified || faceInFrame === false} onClick={captureFace} type="button">
             <Download size={18} />
             {faceVerified ? "Rasm olindi" : "Rasmga olish"}
             <span>Enter</span>
