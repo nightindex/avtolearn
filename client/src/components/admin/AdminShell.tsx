@@ -695,7 +695,7 @@ function initials(name: string) {
 }
 
 function AdminUserAvatar({ user, className = "", size = 52 }: { user: AuthUser; className?: string; size?: number }) {
-  const resolvedSize = Math.min(96, Math.max(32, Number(user.avatarSize || size)));
+  const resolvedSize = Math.min(96, Math.max(32, Number(size)));
   const hasImage = Boolean(user.avatarUrl?.trim());
   const style = {
     "--avatar-color": user.avatarColor || "#1477d4",

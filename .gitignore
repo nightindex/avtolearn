@@ -5,6 +5,7 @@ backend-test*.log
 data/*.sqlite-shm
 data/*.sqlite-wal
 data/backups/
+public/uploads/
 *.tsbuildinfo
 .env
 .env.*

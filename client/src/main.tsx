@@ -53,7 +53,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { askTutor, getCurrentUser, getData, getProgressSummary, getQuestions, getRecentProgress, getSavedQuestions, getTemplates, login, logout as logoutApi, saveQuestion, saveQuestionProgress, saveTemplate, saveTestAttempt, updateProfile, type AuthUser } from "./api";
+import { askTutor, clearAiSession, createAiSession, getCurrentUser, getData, getProgressSummary, getQuestions, getRecentProgress, getSavedQuestions, getTemplates, listAiSessions, login, logout as logoutApi, saveQuestion, saveQuestionProgress, saveTemplate, saveTestAttempt, updateProfile, type AiChatSession, type AuthUser } from "./api";
 import type { AppData, Penalty, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate, Topic } from "./types";
 import "./styles.css";
 import { Dashboard } from "./components/Dashboard";
@@ -340,8 +340,17 @@ function sanitizeTopicHtml(html: string) {
   return html
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, "")
+    .replace(/<embed[\s\S]*?>[\s\S]*?<\/embed>/gi, "")
+    .replace(/<link[\s\S]*?>/gi, "")
+    .replace(/<meta[\s\S]*?>/gi, "")
     .replace(/\son\w+="[^"]*"/gi, "")
     .replace(/\son\w+='[^']*'/gi, "")
+    .replace(/\son\w+=\S+/gi, "")
+    .replace(/\sstyle=(?:"[^"]*"|'[^']*'|\S+)/gi, "")
+    .replace(/\s(href|src)\s*=\s*(["'])\s*(?:javascript|data):[^"']*\2/gi, "")
+    .replace(/\s(href|src)\s*=\s*(?:javascript|data):\S+/gi, "")
     .replace(/javascript:/gi, "");
 }
 
@@ -533,6 +542,7 @@ function App() {
     email: string;
     password?: string;
     avatarUrl?: string;
+    avatarDataUrl?: string;
     avatarColor?: string;
     avatarSize?: number;
   }) => {
@@ -1217,7 +1227,7 @@ function ProfilePage({
   darkMode: boolean;
   language: AppLanguage;
   currentUser: AuthUser | null;
-  onProfileUpdate: (input: { name: string; email: string; password?: string; avatarUrl?: string; avatarColor?: string; avatarSize?: number }) => Promise<AuthUser>;
+  onProfileUpdate: (input: { name: string; email: string; password?: string; avatarUrl?: string; avatarDataUrl?: string; avatarColor?: string; avatarSize?: number }) => Promise<AuthUser>;
   openTutor: () => void;
   setView: (view: View) => void;
 }) {
@@ -1235,6 +1245,7 @@ function ProfilePage({
     email: displayEmail,
     password: "",
     avatarUrl: currentUser?.avatarUrl || "",
+    avatarDataUrl: "",
     avatarColor: avatarColor(currentUser),
     avatarSize: avatarSize(currentUser),
   });
@@ -1247,14 +1258,34 @@ function ProfilePage({
       email: displayEmail,
       password: "",
       avatarUrl: currentUser?.avatarUrl || "",
+      avatarDataUrl: "",
       avatarColor: avatarColor(currentUser),
       avatarSize: avatarSize(currentUser),
     });
   }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.avatarUrl, currentUser?.avatarColor, currentUser?.avatarSize]);
 
   const previewUser: AuthUser | null = currentUser
-    ? { ...currentUser, name: profileDraft.name, email: profileDraft.email, avatarUrl: profileDraft.avatarUrl, avatarColor: profileDraft.avatarColor, avatarSize: profileDraft.avatarSize }
+    ? { ...currentUser, name: profileDraft.name, email: profileDraft.email, avatarUrl: profileDraft.avatarDataUrl || profileDraft.avatarUrl, avatarColor: profileDraft.avatarColor, avatarSize: profileDraft.avatarSize }
     : null;
+
+  function chooseAvatarFile(file: File | null) {
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setProfileMessage("Avatar PNG, JPG yoki WebP formatida bo'lishi kerak.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileMessage("Avatar hajmi 2MB dan oshmasligi kerak.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProfileDraft((draft) => ({ ...draft, avatarDataUrl: String(reader.result || ""), avatarUrl: "" }));
+      setProfileMessage("");
+    };
+    reader.onerror = () => setProfileMessage("Avatar rasmini o'qib bo'lmadi.");
+    reader.readAsDataURL(file);
+  }
 
   async function submitProfile(event: React.FormEvent) {
     event.preventDefault();
@@ -1266,10 +1297,11 @@ function ProfilePage({
         email: profileDraft.email.trim(),
         password: profileDraft.password.trim() || undefined,
         avatarUrl: profileDraft.avatarUrl.trim(),
+        avatarDataUrl: profileDraft.avatarDataUrl,
         avatarColor: profileDraft.avatarColor,
         avatarSize: profileDraft.avatarSize,
       });
-      setProfileDraft((draft) => ({ ...draft, password: "" }));
+      setProfileDraft((draft) => ({ ...draft, password: "", avatarDataUrl: "" }));
       setProfileMessage(translateUi("Profil yangilandi", language));
     } catch (error) {
       setProfileMessage(error instanceof Error ? error.message : translateUi("Profilni yangilab bo'lmadi", language));
@@ -1378,9 +1410,13 @@ function ProfilePage({
               <span>Email</span>
               <input type="email" value={profileDraft.email} onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })} required />
             </label>
-            <label>
-              <span>{translateUi("Avatar rasmi URL", language)}</span>
-              <input value={profileDraft.avatarUrl} onChange={(event) => setProfileDraft({ ...profileDraft, avatarUrl: event.target.value })} placeholder="https://..." />
+            <label className="profile-avatar-upload">
+              <span>{translateUi("Avatar rasmini yuklash", language)}</span>
+              <span className="profile-upload-control">
+                <input accept="image/png,image/jpeg,image/webp" type="file" onChange={(event) => chooseAvatarFile(event.target.files?.[0] || null)} />
+                <span className="profile-upload-button">{translateUi("Rasm tanlash", language)}</span>
+                <small>{profileDraft.avatarDataUrl ? translateUi("Yangi avatar tanlandi", language) : translateUi("PNG, JPG yoki WebP. Maksimal hajm 2MB.", language)}</small>
+              </span>
             </label>
             <div className="profile-editor-row">
               <label>
@@ -1398,8 +1434,11 @@ function ProfilePage({
             </label>
             {profileMessage && <p className="profile-editor-message">{profileMessage}</p>}
             <div className="profile-editor-actions">
-              <button className="ghost-button" type="button" onClick={() => setProfileDraft({ name: displayName, email: displayEmail, password: "", avatarUrl: currentUser?.avatarUrl || "", avatarColor: avatarColor(currentUser), avatarSize: avatarSize(currentUser) })}>
+              <button className="ghost-button" type="button" onClick={() => setProfileDraft({ name: displayName, email: displayEmail, password: "", avatarUrl: currentUser?.avatarUrl || "", avatarDataUrl: "", avatarColor: avatarColor(currentUser), avatarSize: avatarSize(currentUser) })}>
                 {translateUi("Bekor qilish", language)}
+              </button>
+              <button className="ghost-button" type="button" onClick={() => setProfileDraft((draft) => ({ ...draft, avatarUrl: "", avatarDataUrl: "" }))}>
+                {translateUi("Avatarni olib tashlash", language)}
               </button>
               <button className="primary-button" disabled={profileSaving} type="submit">
                 <Save size={16} /> {profileSaving ? translateUi("Saqlanmoqda", language) : translateUi("Saqlash", language)}
@@ -4558,95 +4597,97 @@ function OperationalPage({ view, data }: { view: View; data: AppData }) {
   );
 }
 
-type AiMessage = { role: "user" | "assistant"; text: string };
-type AiSession = {
-  id: string;
-  title: string;
-  meta: string;
-  messages: AiMessage[];
-};
-
 function AiPanel({ question, onClose, embedded }: { question: Question | null; onClose?: () => void; embedded?: boolean }) {
   const initialMessage = question ? "Bu savolni tushuntirib bering" : "";
   const [message, setMessage] = useState(initialMessage);
-  const [sessions, setSessions] = useState<AiSession[]>(() => [
-    {
-      id: "current",
-      title: question ? `Savol #${question.id}` : "Yangi suhbat",
-      meta: "hozir",
-      messages: [],
-    },
-    {
-      id: "exam-help",
-      title: "Yakuniy imtihon",
-      meta: "kecha",
-      messages: [
-        { role: "user", text: "Imtihonga tayyorgarlik uchun nimalarga e'tibor berish kerak?" },
-        { role: "assistant", text: "Belgilar, chorraha qoidalari va jarima mavzularini aralash test orqali mustahkamlang." },
-      ],
-    },
-    {
-      id: "signs",
-      title: "Yo'l belgilari",
-      meta: "2 kun oldin",
-      messages: [
-        { role: "user", text: "Ogohlantiruvchi belgilarni qanday tez ajrataman?" },
-        { role: "assistant", text: "Ularning shakli, rangi va joylashuvini birga yodlang: xavf oldidan masofa va vaziyat belgisi muhim." },
-      ],
-    },
-  ]);
-  const [activeSessionId, setActiveSessionId] = useState("current");
-  const [loading, setLoading] = useState(false);
+  const [sessions, setSessions] = useState<AiChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState("");
+  const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
   const messages = activeSession?.messages ?? [];
+  const activeSessionLoading = loadingSessionId === activeSession?.id;
   const suggestions = [
     "Oxirgi xatolarimni tushuntir",
     "Yakuniy imtihonga reja tuz",
     "Yo'l belgilaridan mini test ber",
   ];
 
-  function updateActiveSession(updater: (session: AiSession) => AiSession) {
-    setSessions((items) => items.map((session) => (session.id === activeSessionId ? updater(session) : session)));
+  useEffect(() => {
+    let cancelled = false;
+    setSessionsLoading(true);
+    listAiSessions()
+      .then((items) => {
+        if (cancelled) return;
+        setSessions(items);
+        setActiveSessionId((current) => (items.some((session) => session.id === current) ? current : items[0]?.id || ""));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSessions([]);
+        setActiveSessionId("");
+      })
+      .finally(() => {
+        if (!cancelled) setSessionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function updateSessionById(sessionId: string, updater: (session: AiChatSession) => AiChatSession) {
+    setSessions((items) => items.map((session) => (session.id === sessionId ? updater(session) : session)));
   }
 
-  function startNewChat() {
-    const id = `chat-${Date.now()}`;
-    setSessions((items) => [
-      {
-        id,
-        title: "Yangi suhbat",
-        meta: "hozir",
-        messages: [],
-      },
-      ...items,
-    ]);
-    setActiveSessionId(id);
+  async function startNewChat() {
     setMessage("");
+    const session = await createAiSession({ title: question ? `Savol #${question.id}` : "Yangi suhbat", questionId: question?.id });
+    setSessions((items) => [session, ...items.filter((item) => item.id !== session.id)]);
+    setActiveSessionId(session.id);
   }
 
-  function clearActiveChat() {
-    updateActiveSession((session) => ({ ...session, messages: [] }));
+  async function clearActiveChat() {
+    if (!activeSession) return;
+    const targetSessionId = activeSession.id;
+    updateSessionById(targetSessionId, (session) => ({ ...session, messages: [] }));
     setMessage("");
+    try {
+      const cleared = await clearAiSession(targetSessionId);
+      updateSessionById(targetSessionId, () => cleared);
+    } catch {
+      updateSessionById(targetSessionId, (session) => ({ ...session, messages: [] }));
+    }
   }
 
   async function send() {
-    if (!message.trim()) return;
+    if (!message.trim() || activeSessionLoading || sessionsLoading) return;
     const current = message;
-    updateActiveSession((session) => ({
+    let targetSession = activeSession;
+    if (!targetSession) {
+      targetSession = await createAiSession({ title: current.slice(0, 44) || "Yangi suhbat", questionId: question?.id });
+      setSessions((items) => [targetSession!, ...items]);
+      setActiveSessionId(targetSession.id);
+    }
+    const targetSessionId = targetSession.id;
+    updateSessionById(targetSessionId, (session) => ({
       ...session,
       title: session.messages.length ? session.title : current.slice(0, 34),
       meta: "hozir",
       messages: [...session.messages, { role: "user", text: current }],
     }));
     setMessage("");
-    setLoading(true);
+    setLoadingSessionId(targetSessionId);
     try {
-      const reply = await askTutor({ message: current, questionId: question?.id, mode: "tutor" });
-      updateActiveSession((session) => ({ ...session, messages: [...session.messages, { role: "assistant", text: reply.answer }] }));
+      const reply = await askTutor({ message: current, questionId: question?.id ?? targetSession.questionId, mode: "tutor", sessionId: targetSessionId });
+      if (reply.session) {
+        updateSessionById(targetSessionId, () => reply.session!);
+      } else {
+        updateSessionById(targetSessionId, (session) => ({ ...session, messages: [...session.messages, { role: "assistant", text: reply.answer }] }));
+      }
     } catch {
-      updateActiveSession((session) => ({ ...session, messages: [...session.messages, { role: "assistant", text: "AI tutor hozircha javob bera olmadi." }] }));
+      updateSessionById(targetSessionId, (session) => ({ ...session, messages: [...session.messages, { role: "assistant", text: "AI tutor hozircha javob bera olmadi." }] }));
     } finally {
-      setLoading(false);
+      setLoadingSessionId((sessionId) => (sessionId === targetSessionId ? null : sessionId));
     }
   }
 
@@ -4656,12 +4697,14 @@ function AiPanel({ question, onClose, embedded }: { question: Question | null; o
         <aside className="ai-history-panel">
           <div className="ai-history-top">
             <span className="ai-brand-mark"><Bot size={18} /></span>
-            <button className="ai-new-chat" onClick={startNewChat} type="button">
+            <button className="ai-new-chat" onClick={() => void startNewChat()} type="button">
               <Plus size={16} />
               Yangi suhbat
             </button>
           </div>
           <div className="ai-history-list">
+            {sessionsLoading && <div className="ai-history-empty">Chatlar yuklanmoqda...</div>}
+            {!sessionsLoading && sessions.length === 0 && <div className="ai-history-empty">Hali suhbat yo'q.</div>}
             {sessions.map((session) => (
               <button
                 className={session.id === activeSessionId ? "active" : ""}
@@ -4684,8 +4727,8 @@ function AiPanel({ question, onClose, embedded }: { question: Question | null; o
               <h2>AvtoLearn Copilot</h2>
             </div>
             <div className="ai-header-actions">
-              <button className="icon-button" onClick={startNewChat} title="Yangi suhbat" type="button"><Plus size={18} /></button>
-              <button className="icon-button" onClick={clearActiveChat} title="Tozalash" type="button"><Trash2 size={18} /></button>
+              <button className="icon-button" onClick={() => void startNewChat()} title="Yangi suhbat" type="button"><Plus size={18} /></button>
+              <button className="icon-button" onClick={() => void clearActiveChat()} title="Tozalash" type="button"><Trash2 size={18} /></button>
               {onClose && <button className="icon-button" onClick={onClose} type="button"><X size={18} /></button>}
             </div>
           </header>
@@ -4712,7 +4755,7 @@ function AiPanel({ question, onClose, embedded }: { question: Question | null; o
                 </div>
               </div>
             ))}
-            {loading && (
+            {activeSessionLoading && (
               <div className="ai-message-row assistant">
                 <span className="ai-message-avatar"><Bot size={16} /></span>
                 <div className="bubble assistant typing"><span /><span /><span /></div>
@@ -4735,7 +4778,7 @@ function AiPanel({ question, onClose, embedded }: { question: Question | null; o
               />
               <div className="ai-compose-actions">
                 <button className="icon-button" title="Biriktirish" type="button"><Paperclip size={17} /></button>
-                <button className="ai-send-button" disabled={!message.trim() || loading} onClick={send} type="button">
+                <button className="ai-send-button" disabled={!message.trim() || activeSessionLoading || sessionsLoading} onClick={() => void send()} type="button">
                   <SendHorizontal size={18} />
                 </button>
               </div>

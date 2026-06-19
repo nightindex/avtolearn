@@ -51,6 +51,7 @@ export async function updateProfile(input: {
   email: string;
   password?: string;
   avatarUrl?: string;
+  avatarDataUrl?: string;
   avatarColor?: string;
   avatarSize?: number;
 }): Promise<AuthUser> {
@@ -131,14 +132,63 @@ export async function saveTestAttempt(input: { mode: string; score: number; tota
   });
 }
 
-export async function askTutor(input: { message: string; questionId?: number; mode?: string }) {
+export type AiChatMessage = {
+  id?: number;
+  role: "user" | "assistant";
+  text: string;
+  model?: string;
+  sources?: { type: string; id: number }[];
+  createdAt?: string;
+};
+
+export type AiChatSession = {
+  id: string;
+  title: string;
+  meta: string;
+  questionId?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  messages: AiChatMessage[];
+};
+
+export async function listAiSessions(): Promise<AiChatSession[]> {
+  const response = await fetch("/api/ai/sessions");
+  if (!response.ok) throw new Error("Chatlarni yuklab bo'lmadi.");
+  const payload = await response.json() as { sessions: AiChatSession[] };
+  return payload.sessions;
+}
+
+export async function createAiSession(input?: { title?: string; questionId?: number }): Promise<AiChatSession> {
+  const response = await fetch("/api/ai/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input || {}),
+  });
+  if (!response.ok) throw new Error("Yangi chat ochib bo'lmadi.");
+  const payload = await response.json() as { session: AiChatSession };
+  return payload.session;
+}
+
+export async function clearAiSession(id: string): Promise<AiChatSession> {
+  const response = await fetch(`/api/ai/sessions/${encodeURIComponent(id)}/clear`, { method: "POST" });
+  if (!response.ok) throw new Error("Chatni tozalab bo'lmadi.");
+  const payload = await response.json() as { session: AiChatSession };
+  return payload.session;
+}
+
+export async function deleteAiSession(id: string): Promise<void> {
+  const response = await fetch(`/api/ai/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) throw new Error("Chatni o'chirib bo'lmadi.");
+}
+
+export async function askTutor(input: { message: string; questionId?: number; mode?: string; sessionId?: string }) {
   const response = await fetch("/api/ai/tutor", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   if (!response.ok) throw new Error("Tutor failed");
-  return response.json() as Promise<{ answer: string; sources: { type: string; id: number }[] }>;
+  return response.json() as Promise<{ answer: string; sources: { type: string; id: number }[]; session?: AiChatSession }>;
 }
 
 export async function getProgressSummary(): Promise<ProgressSummary> {

@@ -1,11 +1,12 @@
 import { createServer } from "node:http";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
+loadLocalEnv(join(root, ".env"));
 const port = Number(process.env.PORT || 5180);
 const dataPath = join(root, "data", "site-data.json");
 const dbPath = join(root, "data", "avtolearn.sqlite");
@@ -13,8 +14,36 @@ const defaultEmail = "i.muxtorov@avtolearn.uz";
 const defaultPassword = "avtolearn2026";
 const sessionCookie = "avtolearn_session";
 const sessionDays = 14;
+const maxJsonBodyBytes = Number(process.env.MAX_JSON_BODY_BYTES || 128 * 1024);
+const aiTutorMaxMessageChars = Number(process.env.AI_TUTOR_MAX_MESSAGE_CHARS || 2500);
+const aiTutorRateWindowMs = Number(process.env.AI_TUTOR_RATE_WINDOW_MS || 60 * 1000);
+const aiTutorRateMax = Number(process.env.AI_TUTOR_RATE_MAX || 12);
+const aiTutorDailyMax = Number(process.env.AI_TUTOR_DAILY_MAX || 200);
+const aiTutorProviderTimeoutMs = Number(process.env.AI_TUTOR_PROVIDER_TIMEOUT_MS || 25 * 1000);
+const aiHistoryRetentionDays = Number(process.env.AI_HISTORY_RETENTION_DAYS || 90);
+const maxAvatarBytes = Number(process.env.MAX_AVATAR_BYTES || 2 * 1024 * 1024);
 const siteData = JSON.parse(readFileSync(dataPath, "utf8"));
+const aiTutorRateState = new Map();
 let db;
+
+if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET is required when NODE_ENV=production");
+}
+
+function loadLocalEnv(path) {
+  if (!existsSync(path)) return;
+  const lines = readFileSync(path, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const separator = trimmed.indexOf("=");
+    if (separator <= 0) continue;
+    const key = trimmed.slice(0, separator).trim();
+    const rawValue = trimmed.slice(separator + 1).trim();
+    const value = rawValue.replace(/^["']|["']$/g, "");
+    if (!process.env[key]) process.env[key] = value;
+  }
+}
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -28,6 +57,13 @@ const mime = {
   ".svg": "image/svg+xml",
   ".mp4": "video/mp4",
   ".webp": "image/webp",
+};
+
+const securityHeaders = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(self), microphone=(), geolocation=()",
 };
 
 const rolePermissions = {
@@ -385,6 +421,27 @@ function runMigrations(database) {
           created_at TEXT NOT NULL,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS ai_sessions (
+          id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          question_id INTEGER,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS ai_messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          user_id INTEGER NOT NULL,
+          role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+          content TEXT NOT NULL,
+          model TEXT NOT NULL DEFAULT '',
+          sources TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES ai_sessions(id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
       `,
     },
     {
@@ -441,6 +498,31 @@ function runMigrations(database) {
   ensureColumn(database, "users", "avatar_url", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(database, "users", "avatar_color", "TEXT NOT NULL DEFAULT '#1477d4'");
   ensureColumn(database, "users", "avatar_size", "INTEGER NOT NULL DEFAULT 52");
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS ai_sessions (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      question_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS ai_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+      content TEXT NOT NULL,
+      model TEXT NOT NULL DEFAULT '',
+      sources TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES ai_sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_sessions_user_updated ON ai_sessions(user_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_ai_messages_session_created ON ai_messages(session_id, created_at);
+  `);
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_question_progress_user_created ON question_progress(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_test_attempts_user_created ON test_attempts(user_id, created_at);
@@ -647,7 +729,41 @@ function cookieHeader(token, expires) {
 }
 
 function clearCookieHeader() {
-  return `${sessionCookie}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${sessionCookie}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+}
+
+function storeAvatarUpload(userId, dataUrl) {
+  if (!dataUrl) return "";
+  const match = String(dataUrl).match(/^data:(image\/(?:png|jpeg|webp));base64,([a-zA-Z0-9+/=]+)$/);
+  if (!match) throw httpError(400, "Avatar must be a PNG, JPG, or WebP image.");
+  const mimeType = match[1];
+  const buffer = Buffer.from(match[2], "base64");
+  if (!buffer.length) throw httpError(400, "Avatar image is empty.");
+  if (buffer.length > maxAvatarBytes) throw httpError(413, `Avatar image is too large. Limit is ${Math.round(maxAvatarBytes / 1024 / 1024)}MB.`);
+  const signatures = {
+    "image/png": buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+    "image/jpeg": buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])),
+    "image/webp": buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP",
+  };
+  if (!signatures[mimeType]) throw httpError(400, "Avatar image type does not match the file content.");
+  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1];
+  const avatarDir = join(root, "public", "uploads", "avatars");
+  mkdirSync(avatarDir, { recursive: true });
+  const filename = `${Number(userId)}-${Date.now()}-${randomBytes(6).toString("hex")}.${extension}`;
+  writeFileSync(join(avatarDir, filename), buffer);
+  return `/uploads/avatars/${filename}`;
+}
+
+function removeUploadedAvatar(avatarUrl) {
+  if (!String(avatarUrl || "").startsWith("/uploads/avatars/")) return;
+  const file = uploadedAssetPath(avatarUrl);
+  if (!file || !existsSync(file)) return;
+  try {
+    unlinkSync(file);
+  } catch {
+    // Best effort cleanup; profile updates should not fail because an old file is locked.
+  }
 }
 
 function parseCookies(req) {
@@ -712,20 +828,35 @@ function publicPath(inputPath) {
   return { file: requested, staticRoot };
 }
 
+function uploadedAssetPath(inputPath) {
+  const decoded = decodeURIComponent(inputPath.split("?")[0]);
+  if (!decoded.startsWith("/uploads/")) return null;
+  const uploadRoot = join(root, "public", "uploads");
+  const requested = normalize(join(uploadRoot, decoded.replace(/^\/uploads\/?/, "")));
+  if (!requested.startsWith(uploadRoot)) return null;
+  return requested;
+}
+
 function serveStatic(req, res) {
   const url = new URL(req.url, `http://localhost:${port}`);
+  const uploaded = uploadedAssetPath(url.pathname);
+  if (uploaded && existsSync(uploaded)) {
+    res.writeHead(200, { ...securityHeaders, "content-type": mime[extname(uploaded).toLowerCase()] || "application/octet-stream" });
+    createReadStream(uploaded).pipe(res);
+    return;
+  }
   const resolved = publicPath(url.pathname);
   let file = resolved?.file;
   if (!file || !existsSync(file)) {
     file = existsSync(join(root, "client", "dist", "index.html")) ? join(root, "client", "dist", "index.html") : join(root, "index.html");
   }
-  res.writeHead(200, { "content-type": mime[extname(file).toLowerCase()] || "application/octet-stream" });
+  res.writeHead(200, { ...securityHeaders, "content-type": mime[extname(file).toLowerCase()] || "application/octet-stream" });
   createReadStream(file).pipe(res);
 }
 
 function json(res, status, value, headers = {}) {
   const body = JSON.stringify(value);
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8", ...headers });
+  res.writeHead(status, { ...securityHeaders, "content-type": "application/json; charset=utf-8", ...headers });
   res.end(body);
 }
 
@@ -736,11 +867,23 @@ function httpError(status, message, details) {
   return error;
 }
 
-function readBody(req) {
+function readBody(req, maxBytes = maxJsonBodyBytes) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
+    let size = 0;
+    let tooLarge = false;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        tooLarge = true;
+        reject(httpError(413, "Request body too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => {
+      if (tooLarge) return;
       try {
         const text = Buffer.concat(chunks).toString("utf8");
         resolve(text ? JSON.parse(text) : {});
@@ -1040,28 +1183,242 @@ function localTutorReply(message, question) {
   ].filter(Boolean).join("\n\n");
 }
 
-async function aiTutor(payload) {
+function cleanTutorAnswer(answer) {
+  return String(answer || "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/\*([^*\n]+)\*/g, "$1")
+    .replace(/_([^_\n]+)_/g, "$1")
+    .replace(/^\s*#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "- ")
+    .trim();
+}
+
+function aiTutorRateKey(req, userId) {
+  return `${userId}:${req.headers["x-forwarded-for"] || req.socket.remoteAddress || "local"}`;
+}
+
+function assertAiTutorRateLimit(req, userId) {
+  const key = aiTutorRateKey(req, userId);
+  const now = Date.now();
+  const day = new Date().toISOString().slice(0, 10);
+  const state = aiTutorRateState.get(key) || { windowStart: now, count: 0, day, daily: 0 };
+  if (now - state.windowStart > aiTutorRateWindowMs) {
+    state.windowStart = now;
+    state.count = 0;
+  }
+  if (state.day !== day) {
+    state.day = day;
+    state.daily = 0;
+  }
+  state.count += 1;
+  state.daily += 1;
+  aiTutorRateState.set(key, state);
+  if (state.count > aiTutorRateMax) throw httpError(429, "AI tutor rate limit reached. Please wait a minute.");
+  if (state.daily > aiTutorDailyMax) throw httpError(429, "Daily AI tutor limit reached. Please try again tomorrow.");
+}
+
+function pruneAiTutorRateState() {
+  const now = Date.now();
+  for (const [key, state] of aiTutorRateState.entries()) {
+    if (now - state.windowStart > aiTutorRateWindowMs * 4) aiTutorRateState.delete(key);
+  }
+}
+
+async function fetchWithTimeout(url, options, timeoutMs = aiTutorProviderTimeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function validateTutorPayload(payload) {
+  const message = String(payload.message || "").trim();
+  if (!message) throw httpError(400, "Message is required");
+  if (message.length > aiTutorMaxMessageChars) throw httpError(413, `Message is too long. Limit is ${aiTutorMaxMessageChars} characters.`);
+}
+
+function pruneAiHistory() {
+  if (!Number.isFinite(aiHistoryRetentionDays) || aiHistoryRetentionDays <= 0) return;
+  const cutoff = new Date(Date.now() - aiHistoryRetentionDays * 24 * 60 * 60 * 1000).toISOString();
+  db.prepare("DELETE FROM ai_history WHERE created_at < ?").run(cutoff);
+  db.prepare("DELETE FROM ai_messages WHERE created_at < ?").run(cutoff);
+  db.prepare("DELETE FROM ai_sessions WHERE updated_at < ?").run(cutoff);
+}
+
+function aiMessageDto(row) {
+  return {
+    id: row.id,
+    role: row.role,
+    text: row.content,
+    model: row.model || "",
+    sources: safeJson(row.sources, []),
+    createdAt: row.created_at,
+  };
+}
+
+function aiSessionDto(row, includeMessages = true) {
+  const messages = includeMessages
+    ? db.prepare("SELECT * FROM ai_messages WHERE session_id = ? ORDER BY created_at ASC, id ASC LIMIT 80").all(row.id).map(aiMessageDto)
+    : [];
+  return {
+    id: row.id,
+    title: row.title,
+    meta: relativeMeta(row.updated_at),
+    questionId: row.question_id ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    messages,
+  };
+}
+
+function safeJson(value, fallback) {
+  try {
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function relativeMeta(value) {
+  const diff = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(diff) || diff < 60 * 1000) return "hozir";
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 60) return `${minutes} daqiqa oldin`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} soat oldin`;
+  return `${Math.floor(hours / 24)} kun oldin`;
+}
+
+function createAiSession(userId, payload = {}) {
+  const now = new Date().toISOString();
+  const id = `chat-${Date.now()}-${randomBytes(4).toString("hex")}`;
+  const title = String(payload.title || "Yangi suhbat").trim().slice(0, 80) || "Yangi suhbat";
+  const questionId = payload.questionId ? Number(payload.questionId) : null;
+  db.prepare("INSERT INTO ai_sessions (id, user_id, title, question_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+    id,
+    userId,
+    title,
+    questionId,
+    now,
+    now,
+  );
+  return aiSessionDto(db.prepare("SELECT * FROM ai_sessions WHERE id = ?").get(id));
+}
+
+function listAiSessions(userId) {
+  return db.prepare("SELECT * FROM ai_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 30").all(userId).map((row) => aiSessionDto(row));
+}
+
+function getAiSessionForUser(userId, sessionId) {
+  return db.prepare("SELECT * FROM ai_sessions WHERE id = ? AND user_id = ?").get(String(sessionId), userId);
+}
+
+function saveAiMessage(userId, sessionId, role, content, model = "", sources = []) {
+  const now = new Date().toISOString();
+  db.prepare("INSERT INTO ai_messages (session_id, user_id, role, content, model, sources, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+    sessionId,
+    userId,
+    role,
+    String(content || ""),
+    String(model || ""),
+    JSON.stringify(sources || []),
+    now,
+  );
+  db.prepare("UPDATE ai_sessions SET updated_at = ? WHERE id = ? AND user_id = ?").run(now, sessionId, userId);
+}
+
+function renameAiSessionFromMessage(userId, sessionId, message) {
+  const session = getAiSessionForUser(userId, sessionId);
+  if (!session || session.title !== "Yangi suhbat") return;
+  const title = String(message || "").trim().replace(/\s+/g, " ").slice(0, 44) || "Yangi suhbat";
+  db.prepare("UPDATE ai_sessions SET title = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(title, new Date().toISOString(), sessionId, userId);
+}
+
+function recentAiMessages(userId, sessionId, limit = 10) {
+  const rows = db.prepare("SELECT role, content FROM ai_messages WHERE user_id = ? AND session_id = ? ORDER BY created_at DESC, id DESC LIMIT ?").all(userId, sessionId, limit);
+  return rows.reverse().map((row) => ({ role: row.role, content: row.content }));
+}
+
+async function aiTutor(payload, memory = []) {
   const question = payload.questionId ? questionById(payload.questionId) : null;
   const fallback = localTutorReply(payload.message || "", question);
-  if (!process.env.OPENAI_API_KEY) return { answer: fallback, sources: question ? [{ type: "question", id: question.id }] : [], model: "local" };
+  const sources = question ? [{ type: "question", id: question.id }] : [];
   const context = question
     ? `Question ${question.id}: ${question.title}\nAnswers: ${question.answers.map((answer) => `${answer.correct ? "[correct]" : "[option]"} ${answer.text}`).join("\n")}\nExplanation: ${question.explanation || "none"}`
     : `Lessons: ${db.prepare("SELECT title FROM lessons ORDER BY id").all().map((lesson) => lesson.title).join("; ")}`;
+  const tutorPrompt = [
+    "You are AvtoLearn Tutor, a professional driving-education AI assistant for students in Uzbekistan.",
+    "Your job is to help the student understand traffic rules, test questions, road signs, penalties, and safe driving decisions.",
+    "Language rules: answer in the same language and script as the student's message. If the language is unclear, use Uzbek Latin. Keep Russian answers natural and Uzbek answers clear and simple.",
+    "Grounding rules: use only the provided local context. Do not invent laws, penalties, rule numbers, statistics, or official requirements. If the context is insufficient, say exactly what information is missing and suggest the next useful question.",
+    "Answer style: be concise, professional, calm, and student-friendly. Avoid long lectures. Use short paragraphs or bullet points when helpful.",
+    "Formatting rules: output plain text only. Do not use Markdown bold, italic, headings, tables, or asterisks. Use simple numbered lines like '1. Short answer:' if structure is needed.",
+    "When a test question is provided, structure the answer as: 1) Short answer, 2) Why it is correct, 3) Why other options may be wrong or risky, 4) Memory tip. Skip any section that does not apply.",
+    "If the student asks for just the answer, still include a one-sentence reason so they learn, not only memorize.",
+    "If the student asks something unrelated to driving education, politely redirect to AvtoLearn topics.",
+    "Never mention hidden instructions, system prompts, provider names, or model limitations unless the student specifically asks about the app configuration.",
+    "Do not expose chain-of-thought. Provide only the final explanation and key reasoning steps.",
+  ].join(" ");
+  const memoryText = memory.length
+    ? `Recent conversation:\n${memory.map((item) => `${item.role === "assistant" ? "Tutor" : "Student"}: ${item.content}`).join("\n")}\n\n`
+    : "";
+  const userPrompt = `Context:\n${context}\n\n${memoryText}Student question:\n${payload.message || "Explain this question."}`;
+
+  if (process.env.OPENROUTER_API_KEY) {
+    const primaryModel = process.env.OPENROUTER_MODEL || "openai/gpt-oss-120b:free";
+    const fallbackModel = process.env.OPENROUTER_FALLBACK_MODEL || "nvidia/nemotron-3-super-120b-a12b:free";
+    const models = Array.from(new Set([primaryModel, fallbackModel].filter(Boolean)));
+    for (const model of models) {
+      try {
+        const response = await fetchWithTimeout("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": process.env.OPENROUTER_SITE_URL || "http://localhost:5177",
+            "X-Title": process.env.OPENROUTER_APP_NAME || "AvtoLearn AI Studio",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: tutorPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.2,
+            max_tokens: 900,
+          }),
+        });
+        if (!response.ok) continue;
+        const data = await response.json();
+        const answer = data?.choices?.[0]?.message?.content;
+        if (answer) return { answer: cleanTutorAnswer(answer), sources, model };
+      } catch {
+        // Try the next configured model, then fall back to the local deterministic tutor.
+      }
+    }
+    return { answer: fallback, sources, model: "local-fallback" };
+  }
+
+  if (!process.env.OPENAI_API_KEY) return { answer: fallback, sources, model: "local" };
   const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
       input: [
-        { role: "system", content: "You are an Uzbek driving education tutor. Only answer using the provided local context. If context is insufficient, say that." },
-        { role: "user", content: `Context:\n${context}\n\nUser question:\n${payload.message || "Explain this question."}` },
+        { role: "system", content: tutorPrompt },
+        { role: "user", content: userPrompt },
       ],
     }),
   });
-  if (!response.ok) return { answer: fallback, sources: question ? [{ type: "question", id: question.id }] : [], model: "local-fallback" };
+  if (!response.ok) return { answer: fallback, sources, model: "local-fallback" };
   const data = await response.json();
-  return { answer: data.output_text || fallback, sources: question ? [{ type: "question", id: question.id }] : [], model };
+  return { answer: cleanTutorAnswer(data.output_text || fallback), sources, model };
 }
 
 function validateQuestionPayload(payload) {
@@ -1148,7 +1505,7 @@ async function handleAuth(req, res, context, url) {
   }
   if (req.method === "PATCH" && url.pathname === "/api/auth/profile") {
     const user = requireUser(context);
-    const payload = await readBody(req);
+    const payload = await readBody(req, Math.max(maxJsonBodyBytes, Math.ceil(maxAvatarBytes * 1.4) + 16 * 1024));
     const existing = getUserById(user.id);
     if (!existing) throw httpError(404, "User not found");
 
@@ -1160,7 +1517,8 @@ async function handleAuth(req, res, context, url) {
     const duplicate = db.prepare("SELECT id FROM users WHERE lower(email) = lower(?) AND id <> ?").get(nextEmail, user.id);
     if (duplicate) throw httpError(409, "Email is already used");
 
-    const avatarUrl = String(payload.avatarUrl ?? existing.avatar_url ?? "").trim();
+    const uploadedAvatarUrl = payload.avatarDataUrl ? storeAvatarUpload(user.id, payload.avatarDataUrl) : "";
+    const avatarUrl = uploadedAvatarUrl || String(payload.avatarUrl ?? existing.avatar_url ?? "").trim();
     const avatarColorInput = String(payload.avatarColor ?? existing.avatar_color ?? "#1477d4").trim();
     const avatarColor = /^#[0-9a-f]{6}$/i.test(avatarColorInput) ? avatarColorInput : "#1477d4";
     const avatarSize = Math.min(96, Math.max(36, Number(payload.avatarSize ?? existing.avatar_size ?? 52)));
@@ -1174,6 +1532,7 @@ async function handleAuth(req, res, context, url) {
       new Date().toISOString(),
       user.id,
     );
+    if ((uploadedAvatarUrl || !avatarUrl) && existing.avatar_url !== avatarUrl) removeUploadedAvatar(existing.avatar_url);
     if (payload.password) {
       const password = String(payload.password);
       if (password.length < 6) throw httpError(400, "Password must contain at least 6 characters");
@@ -1468,9 +1827,51 @@ async function handleApi(req, res) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/ai/sessions") {
+    let sessions = listAiSessions(user.id);
+    if (!sessions.length) sessions = [createAiSession(user.id, { title: "Yangi suhbat" })];
+    json(res, 200, { sessions });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/ai/sessions") {
+    const payload = await readBody(req, 16 * 1024);
+    json(res, 201, { session: createAiSession(user.id, payload) });
+    return;
+  }
+
+  if (req.method === "DELETE" && url.pathname.startsWith("/api/ai/sessions/")) {
+    const sessionId = decodeURIComponent(url.pathname.split("/").pop() || "");
+    const session = getAiSessionForUser(user.id, sessionId);
+    if (!session) throw httpError(404, "Chat session not found");
+    db.prepare("DELETE FROM ai_sessions WHERE id = ? AND user_id = ?").run(sessionId, user.id);
+    json(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/ai/sessions/") && url.pathname.endsWith("/clear")) {
+    const parts = url.pathname.split("/");
+    const sessionId = decodeURIComponent(parts[4] || "");
+    const session = getAiSessionForUser(user.id, sessionId);
+    if (!session) throw httpError(404, "Chat session not found");
+    db.prepare("DELETE FROM ai_messages WHERE session_id = ? AND user_id = ?").run(sessionId, user.id);
+    db.prepare("UPDATE ai_sessions SET updated_at = ? WHERE id = ? AND user_id = ?").run(new Date().toISOString(), sessionId, user.id);
+    json(res, 200, { session: aiSessionDto(getAiSessionForUser(user.id, sessionId)) });
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/ai/tutor") {
-    const payload = await readBody(req);
-    const result = await aiTutor(payload);
+    assertAiTutorRateLimit(req, user.id);
+    pruneAiTutorRateState();
+    const payload = await readBody(req, Math.min(maxJsonBodyBytes, 32 * 1024));
+    validateTutorPayload(payload);
+    let session = payload.sessionId ? getAiSessionForUser(user.id, payload.sessionId) : null;
+    if (!session) session = createAiSession(user.id, { title: String(payload.message || "").slice(0, 44) || "Yangi suhbat", questionId: payload.questionId });
+    const memory = recentAiMessages(user.id, session.id, 10);
+    saveAiMessage(user.id, session.id, "user", payload.message);
+    renameAiSessionFromMessage(user.id, session.id, payload.message);
+    const result = await aiTutor(payload, memory);
+    saveAiMessage(user.id, session.id, "assistant", result.answer, result.model, result.sources || []);
     db.prepare("INSERT INTO ai_history (user_id, message, answer, question_id, model, sources, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
       user.id,
       String(payload.message || ""),
@@ -1480,7 +1881,8 @@ async function handleApi(req, res) {
       JSON.stringify(result.sources || []),
       new Date().toISOString(),
     );
-    json(res, 200, { answer: result.answer, sources: result.sources || [] });
+    pruneAiHistory();
+    json(res, 200, { answer: result.answer, sources: result.sources || [], session: aiSessionDto(getAiSessionForUser(user.id, session.id)) });
     return;
   }
 
