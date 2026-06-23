@@ -45,8 +45,10 @@ export function Dashboard({ data, summary, recent, setView }: DashboardProps) {
   const accuracy = summary?.accuracy ?? 0;
   const answerTotal = summary?.answered ?? 0;
   const correctTotal = summary?.correct ?? 0;
+  const wrongTotal = Math.max(0, answerTotal - correctTotal);
   const attempts = summary?.attempts ?? 0;
   const totalQuestions = data.counts.questions || 0;
+  const remainingQuestions = Math.max(0, totalQuestions - answerTotal);
   const answerPercent = totalQuestions ? Math.min(100, Math.round((answerTotal / totalQuestions) * 100)) : 0;
   const completedTemplates = data.tests.filter((test) => test.completed).length;
   const bestTemplatePercent = data.tests.reduce((best, test) => Math.max(best, test.bestPercent || 0), 0);
@@ -203,8 +205,8 @@ export function Dashboard({ data, summary, recent, setView }: DashboardProps) {
         <article className="dashboard-panel progress-overview-card">
           <div className="dashboard-panel-head">
             <div>
-              <h2>O'quv progressi</h2>
-              <p>Umumiy qamrov va keyingi eng foydali qadam.</p>
+              <h2>Qamrov holati</h2>
+              <p>Bugungi o'qish balansi va baza bo'yicha umumiy vaziyat.</p>
             </div>
             <span className="dashboard-pill">{answerTotal}/{totalQuestions}</span>
           </div>
@@ -217,12 +219,22 @@ export function Dashboard({ data, summary, recent, setView }: DashboardProps) {
               </div>
             </div>
             <div className="progress-summary">
-              <span>Keyingi qadam</span>
-              <h3>{nextStepTitle}</h3>
-              <p>{nextStepText}</p>
-              <div className="progress-actions">
-                <button onClick={() => setView(primaryActionView)}>{primaryActionLabel}</button>
-                <button className="secondary" onClick={() => setView("random-tests")}>Aralash mashq</button>
+              <span>O'qish balansi</span>
+              <h3>{answerPercent}% savollar ko'rilgan</h3>
+              <p>{wrongTotal > 0 ? `${wrongTotal} ta xato savol qayta ko'rishga tayyor.` : "Hozircha xatolar yo'q. Qamrovni oshirishga e'tibor bering."}</p>
+              <div className="dashboard-mini-bars" aria-label="Progress taqsimoti">
+                <div>
+                  <span>To'g'ri</span>
+                  <strong>{correctTotal}</strong>
+                </div>
+                <div>
+                  <span>Xato</span>
+                  <strong>{wrongTotal}</strong>
+                </div>
+                <div>
+                  <span>Qolgan</span>
+                  <strong>{remainingQuestions}</strong>
+                </div>
               </div>
             </div>
           </div>

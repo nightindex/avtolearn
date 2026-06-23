@@ -902,7 +902,7 @@ export function AdminShell({
   return (
     <AdminTranslateContext.Provider value={t}>
     <div className="admin-shell">
-      <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
+      <aside className={`sidebar admin-sidebar ${mobileNavOpen ? "open" : ""}`}>
         <div className="brand">
           <img src="/assets/static/Logo AvtoLearn.svg" alt="AvtoLearn" />
           <div>

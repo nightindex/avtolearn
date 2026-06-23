@@ -53,11 +53,12 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { askTutor, clearAiSession, createAiSession, getCurrentUser, getData, getProgressSummary, getQuestions, getRecentProgress, getSavedQuestions, getTemplates, listAiSessions, login, logout as logoutApi, saveQuestion, saveQuestionProgress, saveTemplate, saveTestAttempt, updateProfile, type AiChatSession, type AuthUser } from "./api";
+import { askTutor, createAiSession, deleteAiSession, getCurrentUser, getData, getProgressSummary, getQuestions, getRecentProgress, getSavedQuestions, getTemplates, listAiSessions, login, logout as logoutApi, saveQuestion, saveQuestionProgress, saveTemplate, saveTestAttempt, updateProfile, type AiChatSession, type AuthUser } from "./api";
 import type { AppData, Penalty, ProgressSummary, Question, QuestionResponse, RecentProgressItem, RoadSignItem, TestTemplate, Topic } from "./types";
 import "./styles.css";
 import { Dashboard } from "./components/Dashboard";
 import { AppLanguage, languages, languageDescriptions, translateUi } from "./utils/i18n";
+import { sanitizeTopicHtml } from "./utils/sanitize";
 import { LoginPage } from "./components/LoginPage";
 import { LanguageSelector } from "./components/LanguageSelector";
 import { AdminShell, canUseAdmin, type AdminSection } from "./components/admin/AdminShell";
@@ -190,8 +191,6 @@ const profileUser = {
 };
 
 const AUTH_STORAGE_KEY = "avtolearn-authenticated";
-const DEMO_EMAIL = profileUser.email;
-const DEMO_PASSWORD = "avtolearn2026";
 // Translation utility functions and dictionaries are imported from ./utils/i18n
 
 function roleLabel(user: AuthUser | null) {
@@ -334,24 +333,6 @@ function backendAsset(path: string) {
   if (path.startsWith("http")) return path;
   if (path.startsWith("/files/")) return `https://back.eavtotalim.uz${path}`;
   return asset(path);
-}
-
-function sanitizeTopicHtml(html: string) {
-  return html
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
-    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, "")
-    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, "")
-    .replace(/<embed[\s\S]*?>[\s\S]*?<\/embed>/gi, "")
-    .replace(/<link[\s\S]*?>/gi, "")
-    .replace(/<meta[\s\S]*?>/gi, "")
-    .replace(/\son\w+="[^"]*"/gi, "")
-    .replace(/\son\w+='[^']*'/gi, "")
-    .replace(/\son\w+=\S+/gi, "")
-    .replace(/\sstyle=(?:"[^"]*"|'[^']*'|\S+)/gi, "")
-    .replace(/\s(href|src)\s*=\s*(["'])\s*(?:javascript|data):[^"']*\2/gi, "")
-    .replace(/\s(href|src)\s*=\s*(?:javascript|data):\S+/gi, "")
-    .replace(/javascript:/gi, "");
 }
 
 function isImageContent(value: string) {
@@ -732,14 +713,15 @@ function App() {
             setLanguage={setLanguage}
             onLogout={logout}
             currentUser={currentUser}
+            hideTutorShortcut={view === "ai"}
           />
         )}
         <section className="content">{renderView()}</section>
       </main>
-      {!isExamFocus && !isAdminView && <button className={`chat-fab ${tutorOpen ? "active" : ""}`} onClick={() => setTutorOpen((open) => !open)} aria-label="AI tutor" aria-expanded={tutorOpen}>
+      {!isExamFocus && !isAdminView && view !== "ai" && <button className={`chat-fab ${tutorOpen ? "active" : ""}`} onClick={() => setTutorOpen((open) => !open)} aria-label="AI tutor" aria-expanded={tutorOpen}>
         {tutorOpen ? <X size={22} /> : <MessageCircle size={22} />}
       </button>}
-      {tutorOpen && !isAdminView && (
+      {tutorOpen && !isAdminView && view !== "ai" && (
         <div className="drawer widget-drawer">
           <AiPanel question={questionForTutor} onClose={() => setTutorOpen(false)} />
         </div>
@@ -822,6 +804,7 @@ function Topbar({
   setLanguage,
   onLogout,
   currentUser,
+  hideTutorShortcut = false,
 }: {
   search: string;
   setSearch: (value: string) => void;
@@ -834,6 +817,7 @@ function Topbar({
   setLanguage: (language: AppLanguage) => void;
   onLogout: () => void;
   currentUser: AuthUser | null;
+  hideTutorShortcut?: boolean;
 }) {
   const searchRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -1104,9 +1088,9 @@ function Topbar({
             </div>
           )}
         </div>
-        <button className="ai-button" onClick={openTutor}>
+        {!hideTutorShortcut && <button className="ai-button" onClick={openTutor}>
           <Bot size={18} /> AI
-        </button>
+        </button>}
       </div>
     </header>
   );
@@ -2780,7 +2764,7 @@ function AutodromePage() {
 }
 
 type TemplateFilter = "all" | "completed" | "not-started" | "saved" | "weak";
-type TemplateSort = "number" | "best" | "not-started";
+type TemplateSort = "recommended" | "number" | "best" | "not-started";
 
 function RandomTestsPage({
   data,
@@ -2931,7 +2915,7 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
   const [templates, setTemplates] = useState<TestTemplate[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TemplateFilter>("all");
-  const [sort, setSort] = useState<TemplateSort>("number");
+  const [sort, setSort] = useState<TemplateSort>("recommended");
   const [sortOpen, setSortOpen] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<TestTemplate | null>(null);
   const [examLanguage, setExamLanguage] = useState<"uz" | "cyrl" | "ru">("uz");
@@ -2954,6 +2938,18 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
         return true;
       })
       .sort((a, b) => {
+        if (sort === "recommended") {
+          const score = (template: TestTemplate) => {
+            const completed = Boolean(template.completed);
+            const weak = completed && Number(template.bestPercent || 0) < 70;
+            const saved = Boolean(template.saved);
+            if (weak) return 0;
+            if (!completed) return 1;
+            if (saved) return 2;
+            return 3;
+          };
+          return score(a) - score(b) || a.id - b.id;
+        }
         if (sort === "best") return Number(b.bestPercent || 0) - Number(a.bestPercent || 0);
         if (sort === "not-started") return Number(a.completed) - Number(b.completed) || a.id - b.id;
         return a.id - b.id;
@@ -2962,14 +2958,18 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
 
   const visibleTemplates = filtered.slice(0, visible);
   const completedCount = templates.filter((template) => template.completed).length;
+  const weakCount = templates.filter((template) => template.completed && Number(template.bestPercent || 0) < 70).length;
+  const savedCount = templates.filter((template) => template.saved).length;
   const bestScore = templates.reduce((best, template) => Math.max(best, Number(template.bestPercent || 0)), 0);
-  const nextTemplate = templates.find((template) => !template.completed) ?? templates[0];
+  const progressPercent = templates.length ? Math.round((completedCount / templates.length) * 100) : 0;
+  const nextTemplate = filtered.find((template) => !template.completed || (template.completed && Number(template.bestPercent || 0) < 70)) ?? templates.find((template) => !template.completed) ?? templates[0];
   const sortOptions: { id: TemplateSort; label: string }[] = [
+    { id: "recommended", label: "Tavsiya etilgan" },
     { id: "number", label: "Shablon raqami" },
     { id: "best", label: "Eng yaxshi natija" },
     { id: "not-started", label: "Boshlanmagan" },
   ];
-  const activeSortLabel = sortOptions.find((option) => option.id === sort)?.label ?? "Shablon raqami";
+  const activeSortLabel = sortOptions.find((option) => option.id === sort)?.label ?? "Tavsiya etilgan";
 
   async function toggleSaved(event: React.MouseEvent, template: TestTemplate) {
     event.stopPropagation();
@@ -3006,12 +3006,15 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
               ? `${nextTemplate.id}-shablondan boshlang. Javoblar imtihon yakuniga qadar tekshirilmaydi, natija esa alohida ko'rinadi.`
               : "Katalogdan istalgan shablonni tanlab, imtihon oqimini boshlang."}
           </p>
+          <div className="template-hero-progress" aria-label="Shablon progressi">
+            <span style={{ width: `${progressPercent}%` }} />
+          </div>
         </div>
         <div className="template-hero-actions">
           <button className="primary-button" disabled={!nextTemplate} onClick={() => nextTemplate && openStartModal(nextTemplate)}>
             {nextTemplate ? `${nextTemplate.id}-shablonni boshlash` : "Shablon yo'q"}
           </button>
-          <span>{completedCount}/{templates.length || 62} yakunlangan</span>
+          <span>{progressPercent}% bajarildi</span>
         </div>
       </section>
 
@@ -3021,6 +3024,8 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
         <div><strong>20</strong><span>savol</span></div>
         <div><strong>{bestScore}%</strong><span>eng yaxshi</span></div>
         <div><strong>{completedCount}</strong><span>yakunlangan</span></div>
+        <div><strong>{weakCount}</strong><span>takrorlash</span></div>
+        <div><strong>{savedCount}</strong><span>saqlangan</span></div>
       </section>
 
       <section className="card template-controls">
@@ -3094,6 +3099,7 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
           const percent = Number(template.bestPercent || 0);
           const completed = Boolean(template.completed);
           const weak = completed && percent < 70;
+          const cardProgress = completed ? Math.max(6, percent) : 0;
           return (
             <article className={`template-card card ${completed ? "completed" : ""} ${weak ? "weak" : ""}`} key={template.id} onClick={() => openStartModal(template)}>
               <button className={`bookmark-button ${template.saved ? "saved" : ""}`} onClick={(event) => toggleSaved(event, template)} aria-label="Save template">
@@ -3114,6 +3120,13 @@ function TemplateTestsPage({ onStart }: { onStart: (template: TestTemplate) => v
                   <p>To'g'ri javoblar: <strong>{Math.round((percent / 100) * Number(template.questions || 20))}</strong></p>
                   <p>Savol: <strong>{template.questions || 20}</strong></p>
                 </div>
+              </div>
+              <div className="template-card-progress" aria-label="Shablon natijasi">
+                <span style={{ width: `${cardProgress}%` }} />
+              </div>
+              <div className="template-card-foot">
+                <span>{weak ? "Qayta ishlash kerak" : completed ? "Natija saqlangan" : "Boshlashga tayyor"}</span>
+                <strong>{completed ? `${percent}%` : "0%"}</strong>
               </div>
               <button className="template-start-button" onClick={(event) => { event.stopPropagation(); openStartModal(template); }}>
                 Boshlash
@@ -3232,6 +3245,7 @@ function QuestionStudio({
   const [showResult, setShowResult] = useState(false);
   const [mediaTabs, setMediaTabs] = useState<Record<number, "image" | "video">>({});
   const [savedQuestionIds, setSavedQuestionIds] = useState<Set<number>>(new Set());
+  const [focusedAllQuestionId, setFocusedAllQuestionId] = useState<number | null>(null);
 
   useEffect(() => {
     const pageSize = mode === "all-tests" && !activeTemplate ? allTestsPageSize : 1;
@@ -3357,6 +3371,10 @@ function QuestionStudio({
   }
 
   const currentQuestion = isExam ? examQuestions[page - 1] : result?.data[0];
+  const allTestsQuestions = isAllTests ? result?.data ?? [] : [];
+  const focusedAllQuestion = isAllTests
+    ? allTestsQuestions.find((question) => question.id === focusedAllQuestionId) ?? allTestsQuestions[0]
+    : null;
   const picked = currentQuestion ? draftSelected[currentQuestion.id] ?? selected[currentQuestion.id] : undefined;
   const confirmedPicked = currentQuestion ? selected[currentQuestion.id] : undefined;
   const pickedAnswer = currentQuestion?.answers.find((answer) => answer.id === picked);
@@ -3369,6 +3387,18 @@ function QuestionStudio({
   const libraryProgress = totalPages ? Math.round((page / totalPages) * 100) : 0;
   const visibleStart = result && questionTotal ? (page - 1) * result.pageSize + 1 : 0;
   const visibleEnd = result && questionTotal ? Math.min(page * result.pageSize, questionTotal) : 0;
+
+  useEffect(() => {
+    if (!isAllTests) return;
+    const firstId = result?.data[0]?.id ?? null;
+    if (!firstId) {
+      setFocusedAllQuestionId(null);
+      return;
+    }
+    setFocusedAllQuestionId((current) =>
+      current && result?.data.some((question) => question.id === current) ? current : firstId,
+    );
+  }, [isAllTests, result?.data]);
 
   useEffect(() => {
     if (!isExam || showResult || timeRemaining <= 0) return;
@@ -3504,7 +3534,7 @@ function QuestionStudio({
             <Video size={15} />
             Faqat video
           </button>
-          <button className="ghost-button" onClick={() => currentQuestion && onAskTutor(currentQuestion)} disabled={!currentQuestion}>
+          <button className="ghost-button" onClick={() => focusedAllQuestion && onAskTutor(focusedAllQuestion)} disabled={!focusedAllQuestion}>
             <Bot size={16} />
             AI izoh
           </button>
@@ -3512,19 +3542,54 @@ function QuestionStudio({
       )}
 
       {isAllTests && result?.data.length ? (
-        <section className="all-tests-list">
-          {result.data.map((question, questionIndex) => {
+        <section className="all-tests-review-layout">
+          <aside className="card all-tests-compact-list" aria-label="Savollar ro'yxati">
+            <div className="all-tests-list-head">
+              <strong>Savollar</strong>
+              <span>{visibleStart}-{visibleEnd}</span>
+            </div>
+            {result.data.map((question, questionIndex) => {
+              const pickedForQuestion = selected[question.id];
+              const pickedAnswerForQuestion = question.answers.find((answer) => answer.id === pickedForQuestion);
+              const absoluteNumber = (page - 1) * result.pageSize + questionIndex + 1;
+              const status = pickedForQuestion ? (pickedAnswerForQuestion?.correct ? "correct" : "wrong") : "idle";
+              return (
+                <button
+                  className={`all-test-row ${focusedAllQuestion?.id === question.id ? "active" : ""} ${status}`}
+                  key={question.id}
+                  onClick={() => setFocusedAllQuestionId(question.id)}
+                  type="button"
+                >
+                  <span className="all-test-row-number">{absoluteNumber}</span>
+                  <span className="all-test-row-copy">
+                    <strong>{clean(question.title)}</strong>
+                    <small>
+                      {question.image ? "Rasm" : "Rasmsiz"}
+                      {question.video ? " / Video" : ""}
+                      {savedQuestionIds.has(question.id) ? " / Saqlangan" : ""}
+                    </small>
+                  </span>
+                  <span className="all-test-row-status">
+                    {status === "correct" ? <CheckCircle2 size={16} /> : status === "wrong" ? <X size={16} /> : <FileText size={16} />}
+                  </span>
+                </button>
+              );
+            })}
+          </aside>
+
+          {focusedAllQuestion && (() => {
+            const question = focusedAllQuestion;
             const pickedForQuestion = selected[question.id];
             const pickedAnswerForQuestion = question.answers.find((answer) => answer.id === pickedForQuestion);
-            const absoluteNumber = (page - 1) * result.pageSize + questionIndex + 1;
+            const absoluteNumber = (page - 1) * result.pageSize + result.data.findIndex((item) => item.id === question.id) + 1;
             const activeMediaTab = mediaTabs[question.id] ?? "image";
             return (
-              <article className="card all-test-card" key={question.id}>
+              <article className="card all-test-card all-tests-focused-card" key={question.id}>
                 <header className="all-test-card-head">
                   <span>{absoluteNumber}</span>
                   <h2>{clean(question.title)}</h2>
                   <div className="all-test-card-actions">
-                    <button className={`ghost-button ${savedQuestionIds.has(question.id) ? "saved" : ""}`} onClick={() => toggleSavedQuestion(question)} type="button">
+                    <button className={`ghost-button ${savedQuestionIds.has(question.id) ? "saved" : ""}`} onClick={() => void toggleSavedQuestion(question)} type="button">
                       <Bookmark size={16} />
                       {savedQuestionIds.has(question.id) ? "Saqlangan" : "Saqlash"}
                     </button>
@@ -3580,7 +3645,7 @@ function QuestionStudio({
                           <button
                             key={answer.id}
                             className={`answer ${chosen ? "chosen" : ""} ${revealed && answer.correct ? "correct" : ""} ${revealed && chosen && !answer.correct ? "wrong" : ""}`}
-                            onClick={() => answerQuestion(question, answer.id)}
+                            onClick={() => void answerQuestion(question, answer.id)}
                             type="button"
                           >
                             <strong>{String.fromCharCode(65 + index)}<small>F{index + 1}</small></strong>
@@ -3599,7 +3664,7 @@ function QuestionStudio({
                 )}
               </article>
             );
-          })}
+          })()}
         </section>
       ) : null}
 
@@ -4646,16 +4711,24 @@ function AiPanel({ question, onClose, embedded }: { question: Question | null; o
     setActiveSessionId(session.id);
   }
 
-  async function clearActiveChat() {
+  async function deleteActiveChat() {
     if (!activeSession) return;
     const targetSessionId = activeSession.id;
-    updateSessionById(targetSessionId, (session) => ({ ...session, messages: [] }));
+    const previousSessions = sessions;
+    const remainingSessions = sessions.filter((session) => session.id !== targetSessionId);
+    setSessions(remainingSessions);
+    setActiveSessionId(remainingSessions[0]?.id || "");
     setMessage("");
     try {
-      const cleared = await clearAiSession(targetSessionId);
-      updateSessionById(targetSessionId, () => cleared);
+      await deleteAiSession(targetSessionId);
+      if (remainingSessions.length === 0) {
+        const nextSession = await createAiSession({ title: question ? `Savol #${question.id}` : "Yangi suhbat", questionId: question?.id });
+        setSessions([nextSession]);
+        setActiveSessionId(nextSession.id);
+      }
     } catch {
-      updateSessionById(targetSessionId, (session) => ({ ...session, messages: [] }));
+      setSessions(previousSessions);
+      setActiveSessionId(targetSessionId);
     }
   }
 
@@ -4728,7 +4801,7 @@ function AiPanel({ question, onClose, embedded }: { question: Question | null; o
             </div>
             <div className="ai-header-actions">
               <button className="icon-button" onClick={() => void startNewChat()} title="Yangi suhbat" type="button"><Plus size={18} /></button>
-              <button className="icon-button" onClick={() => void clearActiveChat()} title="Tozalash" type="button"><Trash2 size={18} /></button>
+              <button className="icon-button" onClick={() => void deleteActiveChat()} title="Chatni o'chirish" type="button"><Trash2 size={18} /></button>
               {onClose && <button className="icon-button" onClick={onClose} type="button"><X size={18} /></button>}
             </div>
           </header>

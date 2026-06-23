@@ -7,11 +7,11 @@ import { DatabaseSync } from "node:sqlite";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 loadLocalEnv(join(root, ".env"));
+const isProduction = process.env.NODE_ENV === "production";
 const port = Number(process.env.PORT || 5180);
-const dataPath = join(root, "data", "site-data.json");
-const dbPath = join(root, "data", "avtolearn.sqlite");
-const defaultEmail = "i.muxtorov@avtolearn.uz";
-const defaultPassword = "avtolearn2026";
+const dataPath = process.env.SITE_DATA_PATH || join(root, "data", "site-data.json");
+const dbPath = process.env.DB_PATH || join(root, "data", "avtolearn.sqlite");
+const devBootstrapEmail = "i.muxtorov@avtolearn.uz";
 const sessionCookie = "avtolearn_session";
 const sessionDays = 14;
 const maxJsonBodyBytes = Number(process.env.MAX_JSON_BODY_BYTES || 128 * 1024);
@@ -26,7 +26,7 @@ const siteData = JSON.parse(readFileSync(dataPath, "utf8"));
 const aiTutorRateState = new Map();
 let db;
 
-if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
+if (isProduction && !process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET is required when NODE_ENV=production");
 }
 
@@ -216,7 +216,9 @@ function initDb() {
   database.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
   runMigrations(database);
   seedSecurity(database);
-  importCatalog(database, siteData);
+  if (shouldImportCatalog(database)) {
+    importCatalog(database, siteData);
+  }
   return database;
 }
 
@@ -554,13 +556,50 @@ function seedSecurity(database) {
   }
 
   const now = new Date().toISOString();
-  const existing = database.prepare("SELECT id FROM users WHERE email = ?").get(defaultEmail);
+  const bootstrap = bootstrapAdminConfig(database);
+  if (!bootstrap) return;
+
+  const existing = database.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(bootstrap.email);
   const userId = existing?.id || database
     .prepare("INSERT INTO users (email, name, password_hash, active, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?) RETURNING id")
-    .get(defaultEmail, "I.MUXTOROV", hashPassword(defaultPassword), now, now).id;
+    .get(bootstrap.email, bootstrap.name, hashPassword(bootstrap.password), now, now).id;
+  if (bootstrap.generated) {
+    console.warn(`Generated development admin credentials: ${bootstrap.email} / ${bootstrap.password}`);
+  }
   const superAdmin = database.prepare("SELECT id FROM roles WHERE key = 'super_admin'").get();
   database.prepare("INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)").run(userId, superAdmin.id);
   backfillAnonymousActivity(database, userId);
+}
+
+function bootstrapAdminConfig(database) {
+  const userCount = database.prepare("SELECT COUNT(*) AS count FROM users").get().count || 0;
+  const email = String(process.env.BOOTSTRAP_ADMIN_EMAIL || "").trim();
+  const password = String(process.env.BOOTSTRAP_ADMIN_PASSWORD || "");
+  const name = String(process.env.BOOTSTRAP_ADMIN_NAME || "Platform Administrator").trim();
+
+  if (email || password) {
+    if (!email || !password) throw new Error("Both BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD are required when bootstrapping an admin.");
+    if (password.length < 12) throw new Error("BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters.");
+    return { email, password, name: name || "Platform Administrator" };
+  }
+
+  if (userCount > 0) return null;
+  if (isProduction) {
+    throw new Error("No users exist. Set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD for first production startup.");
+  }
+
+  return {
+    email: devBootstrapEmail,
+    password: randomBytes(18).toString("base64url"),
+    name: "I.MUXTOROV",
+    generated: true,
+  };
+}
+
+function shouldImportCatalog(database) {
+  if (String(process.env.CATALOG_IMPORT_ON_START || "").toLowerCase() === "true") return true;
+  const catalogTables = ["lessons", "topics", "questions", "test_templates", "sign_categories", "road_signs", "penalties"];
+  return catalogTables.every((table) => (database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count || 0) === 0);
 }
 
 function backfillAnonymousActivity(database, userId) {
@@ -1889,7 +1928,8 @@ async function handleApi(req, res) {
   json(res, 404, { message: "Not found" });
 }
 
-createServer((req, res) => {
+function createAppServer() {
+  return createServer((req, res) => {
   if (req.url.startsWith("/api/")) {
     handleApi(req, res).catch((error) => {
       const status = error.status || 500;
@@ -1898,6 +1938,13 @@ createServer((req, res) => {
     return;
   }
   serveStatic(req, res);
-}).listen(port, () => {
-  console.log(`Avtolearn AI API running at http://127.0.0.1:${port}`);
-});
+  });
+}
+
+if (process.env.NODE_ENV !== "test") {
+  createAppServer().listen(port, () => {
+    console.log(`Avtolearn AI API running at http://127.0.0.1:${port}`);
+  });
+}
+
+export { bootstrapAdminConfig, createAppServer, initDb, shouldImportCatalog };

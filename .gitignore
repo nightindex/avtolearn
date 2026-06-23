@@ -1,7 +1,9 @@
 node_modules/
+client/dist/
 dev-server*.log
 server*.log
 backend-test*.log
+data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
 data/backups/
@@ -9,3 +11,4 @@ public/uploads/
 *.tsbuildinfo
 .env
 .env.*
+!.env.example
